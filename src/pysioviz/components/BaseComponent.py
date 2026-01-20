@@ -35,29 +35,23 @@ import dash_bootstrap_components as dbc
 #############################################
 #############################################
 class BaseComponent(ABC):
-  def __init__(self,
-               unique_id: str,
-               col_width: int):
+  def __init__(self, unique_id: str, col_width: int):
     self._col_width = col_width
     self._unique_id = unique_id
     self._sync_offset = 0  # Initialize sync offset, only relevant for data components, not the control components
-
 
   @property
   def layout(self) -> dbc.Col:
     return self._layout
 
-
   @abstractmethod
   def _activate_callbacks(self) -> None:
     pass
 
-
   def set_sync_offset(self, offset: int):
     """Set synchronization offset for this component"""
     self._sync_offset = int(offset)
-    
-  
+
   def get_sync_offset(self):
     """Get current synchronization offset"""
     return self._sync_offset

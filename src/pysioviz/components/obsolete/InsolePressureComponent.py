@@ -33,9 +33,7 @@ import plotly.express as px
 
 
 class InsolePressureComponent(BaseComponent):
-  def __init__(self,
-               legend_names: list[str],
-               col_width: int = 6):
+  def __init__(self, legend_names: list[str], col_width: int = 6):
     super().__init__(col_width=col_width)
 
     self._legend_names = legend_names
@@ -44,20 +42,17 @@ class InsolePressureComponent(BaseComponent):
     self._layout = dbc.Col([self._pressure_figure], width=self._col_width)
     self._activate_callbacks()
 
-
-  # Callback definition must be wrapped inside an object method 
-  #   to get access to the class instance object with reference to corresponding file. 
+  # Callback definition must be wrapped inside an object method
+  #   to get access to the class instance object with reference to corresponding file.
   def _activate_callbacks(self):
     @app.callback(
-        Output(self._pressure_figure, component_property='figure'),
-        Input(),
-        prevent_initial_call=True
+      Output(self._pressure_figure, component_property='figure'),
+      Input(),
+      prevent_initial_call=True,
     )
     def update_live_data(n):
       # TODO: get the desired pressure map frame from the HDF5 file.
       # TODO: implement custom shape for the pressure heatmap
-      fig = px.choropleth(
-
-      )
+      fig = px.choropleth()
       fig.update(title_text=device_name)
       return fig

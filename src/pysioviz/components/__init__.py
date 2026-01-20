@@ -17,5 +17,5 @@ __all__ = [
   'FrameSliderComponent',
   'AnnotationComponent',
   'OffsetComponent',
-  'SaveLoadComponent'
+  'SaveLoadComponent',
 ]

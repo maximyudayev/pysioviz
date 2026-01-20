@@ -28,7 +28,7 @@
 from typing import Dict, Tuple
 import numpy as np
 
-from utils.datastructures.cache import FFmpegCache
+from utils.cache import Cache
 from .BaseComponent import BaseComponent
 from utils.gui_utils import app
 from dash import Output, Input, dcc, html, Patch
@@ -39,31 +39,36 @@ import h5py
 import ffmpeg
 
 # JPEG End of Image marker
-EOI = b'\xFF\xD9'
+EOI = b'\xff\xd9'
 
 
 class VideoComponent(BaseComponent):
-  def __init__(self,
-               video_path: str,
-               hdf5_path: str,
-               unique_id: str,
-               legend_name: str,
-               col_width: int = 6,
-               is_reference_camera: bool = False,
-               is_highlight: bool = False):
-    super().__init__(unique_id=unique_id,
-                     col_width=col_width)
+  def __init__(
+    self,
+    video_filepath: str,
+    hdf5_filepath: str,
+    unique_id: str,
+    time_hdf5_path: str,
+    sequence_hdf5_path: str,
+    legend_name: str,
+    col_width: int = 6,
+    is_reference: bool = False,
+    is_highlight: bool = False,
+  ):
+    super().__init__(unique_id=unique_id, col_width=col_width)
 
     self._legend_name = legend_name
-    self._video_path = video_path
-    self._hdf5_path = hdf5_path
-    self._is_reference_camera = is_reference_camera
+    self._video_path = video_filepath
+    self._hdf5_path = hdf5_filepath
+    self._time_hdf5_path = time_hdf5_path
+    self._sequence_hdf5_path = sequence_hdf5_path
+    self._is_reference = is_reference
 
     # Get video properties
     self._width, self._height, self._fps, self._total_frames = self._get_video_properties()
     self._width_scaled = 720
     self._height_scaled = 405
-    self._frame_buf_size = self._width_scaled*self._height_scaled*3
+    self._frame_buf_size = self._width_scaled * self._height_scaled * 3
 
     # Read HDF5 metadata for synchronization
     self._read_sync_metadata()
@@ -74,20 +79,26 @@ class VideoComponent(BaseComponent):
     self._truncated_frame_count = int(self._total_frames)
 
     # Create FFmpeg decode cache, will prefetch a window, centered 1/3 of requested cache miss frame
-    self._prefetch_window_s = 5.0
-    self._num_prefetch_frames = round(self._fps*self._prefetch_window_s)
-    self._cache = FFmpegCache(decode_fn=self._decode, decode_fetch_offset=round(self._num_prefetch_frames/3))
+    self._prefetch_window_s = 30.0
+    self._num_prefetch_frames = round(self._fps * self._prefetch_window_s)
+    self._cache = Cache(
+      fetch_fn=self._decode,
+      fetch_offset=round(self._num_prefetch_frames / 3),
+    )
     self._cache.start()
 
     # Create image placeholder
-    self._fig = px.imshow(img=np.zeros([self._height_scaled, self._width_scaled, 3], np.uint8), binary_string=True)
+    self._fig = px.imshow(
+      img=np.zeros([self._height_scaled, self._width_scaled, 3], np.uint8),
+      binary_string=True,
+    )
     self._fig.update_layout(
       title_text=self._legend_name,
       title_font_size=11,
       coloraxis_showscale=False,
       margin=dict(l=0, r=0, t=20, b=0),
       autosize=True,
-      height=None
+      height=None,
     )
     self._fig.update_xaxes(showticklabels=False, showgrid=False)
     self._fig.update_yaxes(showticklabels=False, showgrid=False)
@@ -95,31 +106,34 @@ class VideoComponent(BaseComponent):
     # Create layout with timestamp display
     self._image = dcc.Graph(
       figure=self._fig,
-      id="%s-video"%(self._unique_id), 
+      id='%s-video' % (self._unique_id),
       config={'displayModeBar': False, 'responsive': True},
       clear_on_unhover=True,
-      style={'height': '100%', 'width': '100%', 'cursor': 'pointer' if not is_highlight else 'default'}
+      style={
+        'height': '100%',
+        'width': '100%',
+        'cursor': 'pointer' if not is_highlight else 'default',
+      },
     )
     self._timestamp_display = html.Div(
-      id="%s-timestamp"%(self._unique_id), 
-      className="text-center small text-muted",
-      style={'fontSize': '11px', 'height': '20px', 'lineHeight': '20px'}
+      id='%s-timestamp' % (self._unique_id),
+      className='text-center small text-muted',
+      style={'fontSize': '11px', 'height': '20px', 'lineHeight': '20px'},
     )
 
-    self._layout = dbc.Col([
-      dcc.Loading(
-        id="%s-loader"%(self._unique_id),
-        children=[
-          self._image,
-          self._timestamp_display
-        ],
-        type="default",
-        # target_components={"%s-video"%(self._unique_id): "figure"}
-      )
-    ], width=self._col_width)
+    self._layout = dbc.Col(
+      [
+        dcc.Loading(
+          id='%s-loader' % (self._unique_id),
+          children=[self._image, self._timestamp_display],
+          type='default',
+          # target_components={"%s-video"%(self._unique_id): "figure"}
+        )
+      ],
+      width=self._col_width,
+    )
 
     self._activate_callbacks()
-
 
   def _decode(self, frame_id: int) -> Dict[int, bytes]:
     # Seek to the timestamp because it is much faster than using frame index
@@ -129,6 +143,7 @@ class VideoComponent(BaseComponent):
     buf, _ = (
       ffmpeg.input(
         filename=self._video_path,
+        hwaccel='d3d12va',
         ss=timestamp_start,
       )
       .output(
@@ -139,9 +154,13 @@ class VideoComponent(BaseComponent):
       .run(capture_stdout=True, quiet=True)
     )
     # Split continuous images buffer of jpeg-encoded frames by known end-of-image delimeter
-    new_cache = dict(zip(range(frame_id, frame_id+self._num_prefetch_frames), map(lambda frame: frame+EOI, buf.split(EOI)[:-1])))
+    new_cache = dict(
+      zip(
+        range(frame_id, frame_id + self._num_prefetch_frames),
+        map(lambda frame: frame + EOI, buf.split(EOI)[:-1]),
+      )
+    )
     return new_cache
-
 
   def _get_frame(self, frame_id: int) -> bytes:
     """Get frame at specific index"""
@@ -156,94 +175,82 @@ class VideoComponent(BaseComponent):
       img = self._cache.get_data(frame_id)
       return img
     except Exception as e:
-      print(f"Error getting frame {frame_id}: {e}")
-      return np.zeros((self._height_scaled*self._width_scaled*3), dtype=np.uint8).tobytes()
-
+      print(f'Error getting frame {frame_id}: {e}')
+      return np.zeros((self._height_scaled * self._width_scaled * 3), dtype=np.uint8).tobytes()
 
   def _get_video_properties(self) -> Tuple[int, int, float, int]:
-    """Get video width, height, fps, and total frames using cv2"""
+    """Get video width, height, fps, and total frames using `ffprobe`."""
     probe = ffmpeg.probe(self._video_path)
     video_stream = next(stream for stream in probe['streams'] if stream['codec_type'] == 'video')
     width = int(video_stream['width'])
     height = int(video_stream['height'])
     fps_num, fps_denum = map(lambda x: float(x), video_stream['r_frame_rate'].split('/'))
-    fps = fps_num/fps_denum
+    fps = fps_num / fps_denum
     num_frames = round(float(probe['format']['duration']) * fps)
 
     return width, height, fps, num_frames
 
-
   def get_frame_for_timestamp(self, target_timestamp: float) -> int:
     """Find the frame index closest to a given timestamp with offset"""
-    if self._toa_s is not None:
-      time_diffs = np.abs(self._toa_s - target_timestamp)
+    if self._time is not None:
+      time_diffs = np.abs(self._time - target_timestamp)
       closest_idx = np.argmin(time_diffs)
       # No offset for regular cameras
       return int(closest_idx)
     else:
       return 0
 
-
   def get_timestamp_at_frame(self, frame_index: int) -> float:
     """Get the timestamp for a given frame"""
-    if self._toa_s is not None and frame_index < len(self._toa_s):
-      return self._toa_s[frame_index].item()
+    if self._time is not None and frame_index < len(self._time):
+      return self._time[frame_index].item()
     else:
       return 0.0
-
 
   def _read_sync_metadata(self):
     """Reads synchronization metadata from HDF5 file"""
     with h5py.File(self._hdf5_path, 'r') as hdf5:
-      # Using frame_sequence_id or toa_s for synchronization, could not find a drastic difference between the two, sticking with toa_s for now
-      seq_path = f'/cameras/{self._unique_id}/frame_sequence_id'
-      toa_path = f'/cameras/{self._unique_id}/toa_s'
-
       try:
-        self._frame_sequence_ids = hdf5[seq_path][:]
-        self._toa_s = hdf5[toa_path][:]
+        self._time = hdf5[self._time_hdf5_path][:]
+        self._sequence = hdf5[self._sequence_hdf5_path][:]
       except Exception as e:
-        print(f"Error reading timestamps for cameras: {e}")
-
+        print(f'Error reading timestamps for cameras: {e}')
 
   def get_sync_info(self):
     """Return synchronization info for this component"""
     return {
       'type': 'camera',
       'unique_id': self._unique_id,
-      'toa_s': self._toa_s,
-      'frame_sequence_ids': self._frame_sequence_ids
+      'toa_s': self._time,
+      'frame_sequence_ids': self._sequence,
     }
-
 
   def set_truncation_points(self, start_frame: int, end_frame: int):
     """Set truncation points for this video"""
     self._start_frame = int(max(0, start_frame))
     self._end_frame = int(min(self._total_frames - 1, end_frame))
     self._truncated_frame_count = self._end_frame - self._start_frame + 1
-    print(f"{self._legend_name}: Start frame = {self._start_frame}")
-
+    print(f'{self._legend_name}: Start frame = {self._start_frame}')
 
   def get_truncated_frame_count(self):
     """Get number of frames after truncation"""
     return int(self._truncated_frame_count)
 
-
-  # Callback definition must be wrapped inside an object method 
+  # Callback definition must be wrapped inside an object method
   #   to get access to the class instance object with reference to corresponding file.
   def _activate_callbacks(self):
     @app.callback(
-      Output("%s-video"%(self._unique_id), "figure"),
-      Output("%s-timestamp"%(self._unique_id), "children"),
-      Input("frame-id", "data"),
-      Input("sync-timestamp", "data"),
-      Input("offset-update-trigger", "data"),
+      Output('%s-video' % (self._unique_id), 'figure'),
+      Output('%s-timestamp' % (self._unique_id), 'children'),
+      Input('frame-id', 'data'),
+      Input('sync-timestamp', 'data'),
+      Input('offset-update-trigger', 'data'),
       # prevent_initial_call=False,
     )
     def update_camera(slider_position, sync_timestamp, offset_trigger):
       try:
         # Determine which frame to show
-        if self._is_reference_camera:
+        if self._is_reference:
           # Reference camera: direct mapping from slider
           frame_id = self._start_frame + slider_position
         else:
@@ -255,13 +262,13 @@ class VideoComponent(BaseComponent):
 
         img = self._get_frame(frame_id)
         fig = Patch()
-        fig["data"][0]["source"] = "data:image/jpeg;base64,%s"%base64.b64encode(img).decode('utf-8')
+        fig['data'][0]['source'] = 'data:image/jpeg;base64,%s' % base64.b64encode(img).decode('utf-8')
 
         # Get timestamp for display
         timestamp = self.get_timestamp_at_frame(frame_id)
-        timestamp_text = f"toa_s: {timestamp:.5f} (frame: {frame_id})"
+        timestamp_text = f'toa_s: {timestamp:.5f} (frame: {frame_id})'
 
         return fig, timestamp_text
       except Exception as e:
-        print(f"Error loading frame for {self._unique_id}: {e}")
-        return Patch(), "Error"
+        print(f'Error loading frame for {self._unique_id}: {e}')
+        return Patch(), 'Error'

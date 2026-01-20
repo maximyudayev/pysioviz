@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug GUI",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "src/pysioviz/main.py",
+            // "args": [
+            //     "-o", "examples/data",
+            //     "-f", "examples/dummy.yml",
+            //     "-e", "project=Test", "type=Dummy", "trial=0",
+            // ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "console": "integratedTerminal",
+            "subProcess": true,
+            "justMyCode": false
+        },
+    ]
+}
