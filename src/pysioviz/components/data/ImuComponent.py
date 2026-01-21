@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,22 +20,24 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
-from dash import Output, Input, State, dcc, html
-import dash_bootstrap_components as dbc
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 import h5py
 
+from dash import Output, Input, dcc, html
+import dash_bootstrap_components as dbc
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-class IMUComponent(BaseComponent):
+from pysioviz.components.data import DataComponent
+from pysioviz.utils.gui_utils import app
+
+
+class ImuComponent(DataComponent):
   def __init__(
     self,
     hdf5_path: str,
@@ -50,8 +52,6 @@ class IMUComponent(BaseComponent):
     sampling_rate: float = 60.0,
     col_width: int = 3,
   ):
-    super().__init__(unique_id=unique_id, col_width=col_width)
-
     self._hdf5_path = hdf5_path
     self._data_path = data_path
     self._timestamp_path = timestamp_path
@@ -93,9 +93,83 @@ class IMUComponent(BaseComponent):
     else:
       self._y_units = 'units'
 
-    # Read HDF5 data
-    self._read_data()
+    # Create layout
+    self._dropdown = dcc.Dropdown(
+      id=f'{unique_id}-joint-dropdown',
+      options=[{'label': joint, 'value': i} for i, joint in enumerate(self._joint_names)],
+      value=0,
+      clearable=False,
+      style={'marginBottom': '10px'},
+    )
 
+    self._graph = dcc.Graph(
+      id=f'{unique_id}-imu-plot',
+      config={'displayModeBar': False},
+      clear_on_unhover=True,
+    )
+
+    self._timestamp_display = html.Div(
+      id=f'{unique_id}-timestamp',
+      className='text-center small text-muted',
+      style={'fontSize': '12px'},
+    )
+
+    self.layout = dbc.Col(
+      [
+        html.H6(self._legend_name, className='text-center mb-2'),
+        self._dropdown,
+        self._graph,
+        self._timestamp_display,
+      ],
+      width=col_width,
+    )
+
+    super().__init__(unique_id=unique_id, col_width=col_width)
+
+  def read_data(self):
+    self._read_timestamps()
+    self._read_data()
+    self._match_data_to_time()
+    self._adjust_plot_ranges()
+
+  def _read_timestamps(self):
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
+      if self._timestamp_path in hdf5:
+        self._timestamps = hdf5[self._timestamp_path][:, 0]
+        self._first_timestamp = float(self._timestamps[0])
+        self._last_timestamp = float(self._timestamps[-1])
+      else:
+        raise ValueError(f'Timestamp path {self._timestamp_path} not found in HDF5')
+
+  def _read_data(self):
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
+      if self._data_path in hdf5:
+        self._data = hdf5[self._data_path][:]
+        # Expected shape: (num_timestamps, 17 joints, 3 axes) - TODO: NUM_JOINTS FLEXIBLE FOR REVALEXO
+        if len(self._data.shape) != 3 or self._data.shape[1] != 17 or self._data.shape[2] != 3:
+          raise ValueError(f'Expected IMU data shape (timestamps, 17, 3), got {self._data.shape}')
+      else:
+        raise ValueError(f'Data path {self._data_path} not found in HDF5')
+
+  def _match_data_to_time(self):
+    """Match data and timestamp by `counter` sequence id."""
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
+      ref_counters = hdf5[self._ref_counter_path][:, 0]
+      data_counters = hdf5[self._data_counter_path][:, 0]
+
+      # Create a mapping from values to their first occurrence index in data counters
+      _, first_indices = np.unique(data_counters, return_index=True)
+      value_to_first_idx = dict(zip(data_counters[first_indices], first_indices))
+
+      # Look up each element of reference counters
+      matches = np.array([value_to_first_idx.get(val, -1) for val in ref_counters])
+      self._timestamps = self._timestamps[matches >= 0]
+      self._first_timestamp = float(self._timestamps[0])
+      self._last_timestamp = float(self._timestamps[-1])
+      self._data = self._data[matches[matches >= 0]]
+      print(f'{self._sensor_type} data length ({len(self._data)}) ?= timestamp length ({len(self._timestamps)})', flush=True)
+
+  def _adjust_plot_ranges(self):
     # Calculate symmetric y-axis scaling using percentiles
     # Use percentiles to handle outliers, then create symmetric scale
     # This could truncate extreme values, but double clicking on the graph will bring them back to view
@@ -117,78 +191,7 @@ class IMUComponent(BaseComponent):
     # Current selected joint (default to first - pelvis)
     self._selected_joint_idx = 0
 
-    # Create layout
-    self._dropdown = dcc.Dropdown(
-      id=f'{self._unique_id}-joint-dropdown',
-      options=[{'label': joint, 'value': i} for i, joint in enumerate(self._joint_names)],
-      value=0,
-      clearable=False,
-      style={'marginBottom': '10px'},
-    )
-
-    self._graph = dcc.Graph(
-      id=f'{self._unique_id}-imu-plot',
-      config={'displayModeBar': False},
-      clear_on_unhover=True,
-    )
-
-    self._timestamp_display = html.Div(
-      id=f'{self._unique_id}-timestamp',
-      className='text-center small text-muted',
-      style={'fontSize': '12px'},
-    )
-
-    self._layout = dbc.Col(
-      [
-        html.H6(self._legend_name, className='text-center mb-2'),
-        self._dropdown,
-        self._graph,
-        self._timestamp_display,
-      ],
-      width=self._col_width,
-    )
-
-    self._activate_callbacks()
-
-  def _read_data(self):
-    """Read IMU data and timestamps from HDF5"""
-    with h5py.File(self._hdf5_path, 'r') as hdf5:
-      # Read timestamps
-      if self._timestamp_path in hdf5:
-        self._timestamps = hdf5[self._timestamp_path][:, 0]
-        self._first_timestamp = float(self._timestamps[0])
-        self._last_timestamp = float(self._timestamps[-1])
-      else:
-        raise ValueError(f'Timestamp path {self._timestamp_path} not found in HDF5')
-
-      # Read data
-      if self._data_path in hdf5:
-        self._data = hdf5[self._data_path][:]
-        # Expected shape: (num_timestamps, 17 joints, 3 axes) - TODO: NUM_JOINTS FLEXIBLE FOR REVALEXO
-        if len(self._data.shape) != 3 or self._data.shape[1] != 17 or self._data.shape[2] != 3:
-          raise ValueError(f'Expected IMU data shape (timestamps, 17, 3), got {self._data.shape}')
-
-        # Verify data and timestamp lengths match
-        if len(self._data) != len(self._timestamps):
-          ref_counters = hdf5[self._ref_counter_path][:, 0]
-          pos_counters = hdf5[self._data_counter_path][:, 0]
-
-          # Create a mapping from values to their first occurrence index in B
-          _, first_indices = np.unique(pos_counters, return_index=True)
-          value_to_first_idx = dict(zip(pos_counters[first_indices], first_indices))
-
-          # Look up each element of A
-          matches = np.array([value_to_first_idx.get(val, -1) for val in ref_counters])
-          self._timestamps = self._timestamps[matches >= 0]
-          self._first_timestamp = float(self._timestamps[0])
-          self._last_timestamp = float(self._timestamps[-1])
-          self._data = self._data[matches[matches >= 0]]
-          print(f'{self._sensor_type} data length ({len(self._data)}) ?= timestamp length ({len(self._timestamps)})')
-      else:
-        raise ValueError(f'Data path {self._data_path} not found in HDF5')
-
   def get_sync_info(self):
-    """Return synchronization info for this component"""
     return {
       'type': 'imu',
       'unique_id': self._unique_id,
@@ -197,28 +200,13 @@ class IMUComponent(BaseComponent):
       'timestamps': self._timestamps,
     }
 
-  # ONLY USED FOR INITIAL DATA DISPLAY
   def set_truncation_points(self, start_idx: int, end_idx: int):
-    """Set truncation points"""
     self._start_idx = int(max(0, start_idx))
     self._end_idx = int(min(len(self._timestamps) - 1, end_idx))
-    print(f'{self._legend_name}: Start index = {self._start_idx}')
-
-  # Used to sync with the frame slider update, OFFSET ALREADY APPLIED - SHARED WITH SKELETON
-  def get_timestamp_for_sync(self, sync_timestamp: float) -> int:
-    """Find the index closest to a given timestamp with offset"""
-    if self._timestamps is not None:
-      time_diffs = np.abs(self._timestamps - sync_timestamp)
-      closest_idx = np.argmin(time_diffs)
-      # Apply offset
-      offset_idx = closest_idx + self._sync_offset
-      # Ensure within bounds
-      offset_idx = max(0, min(len(self._timestamps) - 1, offset_idx))
-      return int(offset_idx)
-    return 0
+    print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
 
   def _create_figure(self, center_idx: int, joint_idx: int):
-    """Create the line plot figure for the given center index and joint"""
+    # Create the line plot figure for the given center index and joint
     # Ensure center_idx is within bounds
     center_idx = max(0, min(center_idx, len(self._data) - 1))
 
@@ -292,7 +280,7 @@ class IMUComponent(BaseComponent):
 
     return fig
 
-  def _activate_callbacks(self):
+  def activate_callbacks(self):
     @app.callback(
       Output(f'{self._unique_id}-imu-plot', 'figure'),
       Output(f'{self._unique_id}-timestamp', 'children'),
@@ -328,7 +316,7 @@ class IMUComponent(BaseComponent):
           return fig, timestamp_text
 
       except Exception as e:
-        print(f'Error updating IMU plot: {e}')
+        print(f'Error updating IMU plot: {e}', flush=True)
         import traceback
 
         traceback.print_exc()

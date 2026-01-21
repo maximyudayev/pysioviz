@@ -27,19 +27,11 @@
 
 import queue
 from typing import Dict, Any, Callable
-from dataclasses import dataclass
 from collections import defaultdict
 import threading
 
-from utils.time_utils import get_time
-
-
-@dataclass
-class DataRequest:
-  """Object wrapping user's element of interest into a fetch request."""
-
-  key: str
-  timestamp: float
+from pysioviz.utils.time_utils import get_time
+from pysioviz.utils.types import DataRequest
 
 
 class Cache:

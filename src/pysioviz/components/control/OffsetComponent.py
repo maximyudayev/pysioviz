@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,29 +20,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
-from dash import html, dcc, Input, Output, State, callback_context, ALL
-import dash_bootstrap_components as dbc
 import json
+
+from dash import html, Input, Output, State, callback_context, ALL
+import dash_bootstrap_components as dbc
+
+from pysioviz.components import BaseComponent
+from pysioviz.utils.gui_utils import app
 
 
 class OffsetComponent(BaseComponent):
-  """
-  OffsetComponent: Synchronization offset control component
+  """Offset alignment control component.
 
-  - Individual offset controls for each component
-  - Shared offset for skeleton/IMU components
-  - Increment/decrement buttons (+/-1, +/-10)
-  - Reset buttons (individual and all)
-  - Apply offsets to components
-
+  - Individual offset controls for each component.
+  - Shared offset for skeleton/IMU components.
+  - Increment/decrement buttons (+/-1, +/-10).
+  - Reset buttons (individual and all).
+  - Apply offsets to components.
   """
 
   def __init__(self, offset_components: list, all_components: list):
@@ -53,11 +52,10 @@ class OffsetComponent(BaseComponent):
         offset_components: Components that can have offsets
         all_components: All components (for applying offsets)
     """
-    super().__init__(unique_id='offset_panel', col_width=12)
     self._offset_components = offset_components
     self._all_components = all_components
     self._create_layout()
-    self._activate_callbacks()
+    super().__init__(unique_id='offset_panel', col_width=12)
 
   def _create_layout(self):
     """Create offset control UI."""
@@ -105,6 +103,7 @@ class OffsetComponent(BaseComponent):
     }
 
     # Sort components into groups
+    # TODO: cleanup.
     for comp in components:
       if hasattr(comp, '_is_eye_camera') and comp._is_eye_camera:
         component_groups['Eye Camera'].append(comp)
@@ -368,9 +367,7 @@ class OffsetComponent(BaseComponent):
             comp.set_sync_offset(offset_value)
             break
 
-  def _activate_callbacks(self):
-    """Register all callbacks for this component."""
-
+  def activate_callbacks(self):
     @app.callback(
       Output('offsets-store', 'data'),
       Output('offset-update-trigger', 'data'),

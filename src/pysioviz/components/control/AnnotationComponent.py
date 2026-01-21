@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,43 +20,38 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
+import json
+
 from dash import html, dcc, Input, Output, State, callback_context, ALL
 import dash_bootstrap_components as dbc
-import json
+
+from pysioviz.components import BaseComponent
+from pysioviz.utils.gui_utils import app
+from pysioviz.utils.types import Annotation
 
 
 class AnnotationComponent(BaseComponent):
+  """Annotation management component.
+
+  This component handles all annotation-related functionality.
+
+  - Add/Edit/Delete annotations.
+  - Annotation cards display.
+  - Keyboard shortcuts (N key for next input, 0-9 for label selection).
+  - Start/End time buttons.
+  - Annotation counter.
   """
-  AnnotationComponent: Annotation management component
 
-  This component handles all annotation-related functionality
-
-  - Add/Edit/Delete annotations
-  - Annotation cards display
-  - Keyboard shortcuts (N key for next input, 0-9 for label selection)
-  - Start/End time buttons
-  - Annotation counter
-  """
-
-  def __init__(self, annotation_options: list):
-    """
-    Annotation management component.
-
-    Args:
-        annotation_options: List of annotation label options
-    """
-    super().__init__(unique_id='annotation_panel', col_width=12)
+  def __init__(self, annotation_options: list[Annotation]):
     self._annotation_options = annotation_options
-    self._annotation_values = [opt['value'] for opt in annotation_options]
+    self._annotation_values = [opt.value for opt in annotation_options]
     self._create_layout()
-    self._activate_callbacks()
+    super().__init__(unique_id='annotation_panel', col_width=12)
 
   def _create_layout(self):
     """Create annotation UI with cards and input fields."""
@@ -748,10 +743,7 @@ class AnnotationComponent(BaseComponent):
 
     return annotation_cards
 
-  def _activate_callbacks(self):
-    """Register all callbacks for this component."""
-
-    # Handle keyboard shortcuts for annotations
+  def activate_callbacks(self):
     @app.callback(
       Output('new-annotation-label', 'value', allow_duplicate=True),
       Output('active-input', 'data'),
@@ -779,6 +771,8 @@ class AnnotationComponent(BaseComponent):
       te_end,
       sync_timestamp,
     ):
+      """Handle keyboard shortcuts for annotations."""
+
       if not keyboard_event:
         return current_label, active_input, ts_start, ts_end, te_start, te_end
 
@@ -788,7 +782,7 @@ class AnnotationComponent(BaseComponent):
         # Handle number key for label selection
         key = keyboard_event.get('key')
         if key == '0':
-          label_value = self._annotation_values[9]  # Bench
+          label_value = self._annotation_values[0]  # Standing
         else:
           idx = int(key) - 1
           if 0 <= idx < len(self._annotation_values):
@@ -853,7 +847,6 @@ class AnnotationComponent(BaseComponent):
       # No relevant keyboard event
       return current_label, active_input, ts_start, ts_end, te_start, te_end
 
-    # Handle Start/End button clicks
     @app.callback(
       Output('task-start-start-input', 'value'),
       Output('task-start-end-input', 'value'),
@@ -903,6 +896,8 @@ class AnnotationComponent(BaseComponent):
       edit_te_end_vals,
       annotations,
     ):
+      """Handle Start/End button clicks."""
+
       ctx = callback_context
       if not ctx.triggered:
         return (
@@ -1067,7 +1062,6 @@ class AnnotationComponent(BaseComponent):
           edit_te_end_vals,
         )
 
-    # Main annotation management callback
     @app.callback(
       Output('annotations-store', 'data'),
       Output('annotations-container', 'children'),
@@ -1128,6 +1122,8 @@ class AnnotationComponent(BaseComponent):
       delete_target,
       expanded_state,
     ):
+      """Main annotation management callback."""
+
       ctx = callback_context
 
       # Get annotations from store_data

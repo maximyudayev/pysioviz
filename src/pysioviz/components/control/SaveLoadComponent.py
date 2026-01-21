@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,35 +20,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
-from dash import html, dcc, Input, Output, State
-import dash_bootstrap_components as dbc
 import numpy as np
 import h5py
 import base64
 import tempfile
 import os
-from datetime import datetime
+
+from dash import html, dcc, Input, Output, State
+import dash_bootstrap_components as dbc
+
+from pysioviz.components import BaseComponent
+from pysioviz.utils.time_utils import get_time_str
+from pysioviz.utils.gui_utils import app
 
 
 class SaveLoadComponent(BaseComponent):
-  """
-  SaveLoadComponent: Load/save annotation component
-  - Save annotations and offsets to HDF5
-  - Load annotations and offsets from HDF5
+  """Load/save annotation component.
+
+  - Save annotations and offsets to HDF5.
+  - Load annotations and offsets from HDF5.
   """
 
   def __init__(self):
     """Save/Load functionality component."""
-    super().__init__(unique_id='save_load', col_width=12)
     self._create_layout()
-    self._activate_callbacks()
+    super().__init__(unique_id='save_load', col_width=12)
 
   def _create_layout(self):
     """Create save/load buttons and feedback UI."""
@@ -185,6 +186,8 @@ class SaveLoadComponent(BaseComponent):
       with tempfile.NamedTemporaryFile(delete=False, suffix='.hdf5') as tmp_file:
         tmp_file_path = tmp_file.name
 
+      time_str = get_time_str()
+
       # Write HDF5 file
       with h5py.File(tmp_file_path, 'w') as hdf5:
         # Create annotations dataset
@@ -192,7 +195,7 @@ class SaveLoadComponent(BaseComponent):
 
         # Add metadata as attributes
         ann_dataset.attrs['total_annotations'] = len(sorted_annotations)
-        ann_dataset.attrs['created_timestamp'] = datetime.now().isoformat()
+        ann_dataset.attrs['created_timestamp'] = time_str
 
         # Add label statistics as attributes
         labels_count = {}
@@ -213,7 +216,7 @@ class SaveLoadComponent(BaseComponent):
         file_content = f.read()
 
       # Create filename with timestamp
-      filename = f'annotations_{datetime.now().strftime("%Y%m%d_%H%M%S")}.hdf5'
+      filename = f'annotations_{time_str}.hdf5'
 
       message = f'Successfully saved {len(sorted_annotations)} annotations'
       if offsets:
@@ -354,10 +357,7 @@ class SaveLoadComponent(BaseComponent):
       if tmp_file_path and os.path.exists(tmp_file_path):
         os.unlink(tmp_file_path)
 
-  def _activate_callbacks(self):
-    """Register all callbacks for this component."""
-
-    # Callback for Load Annotations from uploaded file
+  def activate_callbacks(self):
     @app.callback(
       Output('annotations-store', 'data', allow_duplicate=True),
       Output('annotation-expanded', 'data', allow_duplicate=True),
@@ -368,12 +368,12 @@ class SaveLoadComponent(BaseComponent):
       prevent_initial_call=True,
     )
     def load_annotations(contents, filename):
+      """Callback for Load Annotations from uploaded file."""
       if contents is None:
         return [], {}, {}, None
 
       return self._load_from_hdf5(contents, filename)
 
-    # Callback for Save Annotations button
     @app.callback(
       Output('download-annotations', 'data'),
       Output('feedback-message', 'data', allow_duplicate=True),
@@ -383,6 +383,7 @@ class SaveLoadComponent(BaseComponent):
       prevent_initial_call=True,
     )
     def save_annotations(n_clicks, annotations, offsets):
+      """Callback for Save Annotations button."""
       if n_clicks and annotations:
         return self._save_to_hdf5(annotations, offsets)
       elif n_clicks and not annotations:
@@ -390,7 +391,6 @@ class SaveLoadComponent(BaseComponent):
 
       return None, None
 
-    # Callback to display feedback toast
     @app.callback(
       Output('feedback-toast', 'is_open'),
       Output('feedback-toast', 'children'),
@@ -400,6 +400,7 @@ class SaveLoadComponent(BaseComponent):
       prevent_initial_call=True,
     )
     def show_feedback(feedback_data):
+      """Callback to display feedback toast."""
       if feedback_data:
         message = feedback_data.get('message', '')
         msg_type = feedback_data.get('type', 'info')

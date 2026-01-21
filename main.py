@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,28 +20,54 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
 # Hotfix run using python multimodal_annotation.py (adding parent directory to path)
-import sys
-import os
+from pathlib import Path
+# import sys
+# import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dash import ClientsideFunction, html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
-from pathlib import Path
 
-from components import *
-from sync_utils import calculate_truncation_points, apply_truncation
-from utils.gui_utils import app
+from pysioviz.components.control import AnnotationComponent, FrameSliderComponent, OffsetComponent, SaveLoadComponent
+from pysioviz.components.data import DataComponent, VideoComponent, ImuComponent, SkeletonComponent, LinePlotComponent
+from pysioviz.utils.sync_utils import calculate_truncation_points, apply_truncation
+from pysioviz.utils.gui_utils import app
+from pysioviz.utils.types import Annotation
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
+# Annotation options (label dropdown and values to save in HDF5)
+ANNOTATION_OPTIONS = [
+  Annotation(label='1. Standing', value='Standing'),
+  Annotation(label='2. Walking', value='Walking'),
+  Annotation(label='3. Sitting', value='Sitting'),
+  Annotation(label='4. Sitting Down', value='Sitting Down'),
+  Annotation(label='5. Standing Up', value='Standing Up'),
+  Annotation(label='6. Stair Ascent', value='Stair Ascent'),
+  Annotation(label='7. Stair Descent', value='Stair Descent'),
+  Annotation(label='8. Slope Ascent', value='Slope Ascent'),
+  Annotation(label='9. Slope Descent', value='Slope Descent'),
+  Annotation(label='10. Step Over', value='Step Over'),
+  Annotation(label='11. Cross Country', value='Cross Country'),
+  Annotation(label='12. Box Pickup', value='Box Pickup'),
+  Annotation(label='13. Box Putdown', value='Box Putdown'),
+  Annotation(label='14. Slalom', value='Slalom'),
+  Annotation(label='15. Slalom Left Turn', value='Slalom Left Turn'),
+  Annotation(label='16. Slalom Right Turn', value='Slalom Right Turn'),
+  Annotation(label='17. Standing Turn Left', value='Standing Turn Left'),
+  Annotation(label='18. Standing Turn Right', value='Standing Turn Right'),
+  Annotation(label='19. Radius Turn Left', value='Radius Turn Left'),
+  Annotation(label='20. Radius Turn Right', value='Radius Turn Right'),
+]
+
 # Camera configurations
 CAMERA_CONFIGS = [
   {
@@ -66,37 +92,15 @@ CAMERA_CONFIGS = [
   },
 ]
 
-# Annotation options (label dropdown and values to save in HDF5)
-ANNOTATION_OPTIONS = [
-  {'label': '1. Standing', 'value': 'Standing'},
-  {'label': '2. Walking', 'value': 'Walking'},
-  {'label': '3. Sitting', 'value': 'Sitting'},
-  {'label': '4. Sitting Down', 'value': 'Sitting Down'},
-  {'label': '5. Standing Up', 'value': 'Standing Up'},
-  {'label': '6. Stair Ascent', 'value': 'Stair Ascent'},
-  {'label': '7. Stair Descent', 'value': 'Stair Descent'},
-  {'label': '8. Slope Ascent', 'value': 'Slope Ascent'},
-  {'label': '9. Slope Descent', 'value': 'Slope Descent'},
-  {'label': '10. Step Over', 'value': 'Step Over'},
-  {'label': '11. Cross Country', 'value': 'Cross Country'},
-  {'label': '12. Box Pickup', 'value': 'Box Pickup'},
-  {'label': '13. Box Putdown', 'value': 'Box Putdown'},
-  {'label': '14. Slalom', 'value': 'Slalom'},
-  {'label': '15. Slalom Left Turn', 'value': 'Slalom Left Turn'},
-  {'label': '16. Slalom Right Turn', 'value': 'Slalom Right Turn'},
-  {'label': '17. Standing Turn Left', 'value': 'Standing Turn Left'},
-  {'label': '18. Standing Turn Right', 'value': 'Standing Turn Right'},
-  {'label': '19. Radius Turn Left', 'value': 'Radius Turn Left'},
-  {'label': '20. Radius Turn Right', 'value': 'Radius Turn Right'},
-]
-
 # File paths, expected that other hdf5 files are in this directory, change if not the case
-BASE_PATH = '../kdd2026/data/project_Revalexo/type_Transparent/trial_1'
+BASE_PATH = 'C:/Users/maxim/Documents/Code/Projects/kdd2026/data/project_Revalexo/type_Transparent/trial_1'
 eye_video_path = Path(f'{BASE_PATH}/glasses_ego.mkv')
 eye_hdf5_path = Path(f'{BASE_PATH}/glasses.hdf5')
 cameras_hdf5_path = Path(f'{BASE_PATH}/cameras.hdf5')
 mvn_hdf5_path = Path(f'{BASE_PATH}/mvn-analyze.hdf5')
 exo_hdf5_path = Path(f'{BASE_PATH}/revalexo.hdf5')
+
+HWACCEL = 'd3d12va'
 
 # ============================================================================
 # APP INITIALIZATION & SHARED STATE
@@ -136,15 +140,15 @@ shared_stores = html.Div(
 # DATA LOADING - Initialize Data Components
 # ============================================================================
 if __name__ == '__main__':
-  print('Loading data components...')
+  print('Loading data components...', flush=True)
 
-  # Check camera hdf5 exists
+  # Check camera hdf5 exists.
   if not cameras_hdf5_path.exists():
     raise FileNotFoundError(f'Required file {cameras_hdf5_path} not found.')
 
-  # Initialize camera components
+  # Initialize camera components.
   camera_components: list[VideoComponent] = []
-  reference_camera: VideoComponent = None
+  reference_camera: VideoComponent | None = None
   reference_camera_count = 0
 
   for config in CAMERA_CONFIGS:
@@ -157,6 +161,7 @@ if __name__ == '__main__':
         time_hdf5_path=f'/cameras/{config["unique_id"]}/toa_s',
         sequence_hdf5_path=f'/cameras/{config["unique_id"]}/frame_sequence_id',
         legend_name=f'Camera {config["unique_id"]}' + (' (Reference)' if config['is_reference'] else ''),
+        hwaccel=HWACCEL,
         col_width=6,
         is_reference=config['is_reference'],
         is_highlight=False,
@@ -176,8 +181,8 @@ if __name__ == '__main__':
       f'Multiple reference cameras found ({reference_camera_count}). Only one camera should be marked as reference.'
     )
 
-  # Eye camera - WITH GAZE DATA SUPPORT
-  eye_component: VideoComponent = None
+  # Eye camera.
+  eye_component: VideoComponent | None = None
   if eye_video_path.exists():
     try:
       eye_component = VideoComponent(
@@ -187,6 +192,7 @@ if __name__ == '__main__':
         time_hdf5_path=f'/glasses/ego/toa_s',
         sequence_hdf5_path=f'/glasses/ego/frame_sequence_id',
         legend_name='Eye World Camera',
+        hwaccel=HWACCEL,
         col_width=3,
         is_highlight=False,
       )
@@ -218,10 +224,10 @@ if __name__ == '__main__':
   #   print("Warning: Insole HDF5 not found, skipping insole data...")
 
   # MVN Analyze components (skeleton and IMU)
-  skeleton_component: SkeletonComponent = None
-  imu_accel_component: IMUComponent = None
-  imu_gyro_component: IMUComponent = None
-  imu_mag_component: IMUComponent = None
+  skeleton_component: SkeletonComponent | None = None
+  imu_accel_component: ImuComponent | None = None
+  imu_gyro_component: ImuComponent | None = None
+  imu_mag_component: ImuComponent | None = None
 
   if mvn_hdf5_path.exists():
     try:
@@ -242,7 +248,7 @@ if __name__ == '__main__':
 
     try:
       # Create IMU components.
-      imu_accel_component = IMUComponent(
+      imu_accel_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/acceleration',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -256,7 +262,7 @@ if __name__ == '__main__':
         col_width=4,
       )
 
-      imu_gyro_component = IMUComponent(
+      imu_gyro_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/gyroscope',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -270,7 +276,7 @@ if __name__ == '__main__':
         col_width=4,
       )
 
-      imu_mag_component = IMUComponent(
+      imu_mag_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/magnetometer',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -308,7 +314,7 @@ if __name__ == '__main__':
   )  # Using 100th frame of reference camera
 
   # Apply truncation to all components
-  all_components = camera_components + ([eye_component] if eye_component else []) + skeleton_components + imu_components
+  all_components: list[DataComponent] = camera_components + ([eye_component] if eye_component else []) + skeleton_components + imu_components
   apply_truncation(all_components, truncation_points)
 
   # Use reference camera's frame count as the reference for slider
@@ -635,15 +641,15 @@ if __name__ == '__main__':
         if cam._is_reference:
           actual_frame = cam._start_frame + current_frame
         else:
-          actual_frame = cam.get_frame_for_timestamp(sync_timestamp)
-        timestamp = cam.get_timestamp_at_frame(actual_frame)
+          actual_frame = cam._get_frame_for_timestamp(sync_timestamp)
+        timestamp = cam._get_timestamp_at_frame(actual_frame)
         return f'Camera {cam._unique_id} - toa_s: {timestamp:.7f}'
 
     # Handle eye video click
     if eye_component and trigger_id == 'eye_world-video':
       if sync_timestamp:
-        actual_frame = eye_component.get_frame_for_timestamp(sync_timestamp)
-        timestamp = eye_component.get_timestamp_at_frame(actual_frame)
+        actual_frame = eye_component._get_frame_for_timestamp(sync_timestamp)
+        timestamp = eye_component._get_timestamp_at_frame(actual_frame)
         return f'Eye video - frame_timestamp: {timestamp:.7f}'
 
     # Handle skeleton click

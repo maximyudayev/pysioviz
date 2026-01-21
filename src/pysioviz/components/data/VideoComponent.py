@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,29 +20,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
 from typing import Dict, Tuple
 import numpy as np
+import ffmpeg
+import base64
+import h5py
 
-from utils.cache import Cache
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
 from dash import Output, Input, dcc, html, Patch
 import dash_bootstrap_components as dbc
 import plotly.express as px
-import base64
-import h5py
-import ffmpeg
+
+from pysioviz.components.data import DataComponent
+from pysioviz.utils.cache import Cache
+from pysioviz.utils.gui_utils import app
+
 
 # JPEG End of Image marker
 EOI = b'\xff\xd9'
 
 
-class VideoComponent(BaseComponent):
+class VideoComponent(DataComponent):
   def __init__(
     self,
     video_filepath: str,
@@ -51,12 +53,11 @@ class VideoComponent(BaseComponent):
     time_hdf5_path: str,
     sequence_hdf5_path: str,
     legend_name: str,
+    hwaccel: str = 'd3d12va',  # 'cuda', 'qsv', 'amf', 'opencl', 'vulkan', 'd3d12va', 'd3d11va'
     col_width: int = 6,
     is_reference: bool = False,
     is_highlight: bool = False,
   ):
-    super().__init__(unique_id=unique_id, col_width=col_width)
-
     self._legend_name = legend_name
     self._video_path = video_filepath
     self._hdf5_path = hdf5_filepath
@@ -70,19 +71,44 @@ class VideoComponent(BaseComponent):
     self._height_scaled = 405
     self._frame_buf_size = self._width_scaled * self._height_scaled * 3
 
-    # Read HDF5 metadata for synchronization
-    self._read_sync_metadata()
-
     # Initialize truncation points
     self._start_frame = 0
     self._end_frame = self._total_frames - 1
     self._truncated_frame_count = int(self._total_frames)
 
-    # Create FFmpeg decode cache, will prefetch a window, centered 1/3 of requested cache miss frame
     self._prefetch_window_s = 30.0
     self._num_prefetch_frames = round(self._fps * self._prefetch_window_s)
+
+    # Create FFmpeg decode cache, will prefetch a window, centered 1/3 of requested cache miss frame
+    # TODO: get the timestamp from the HDF5? Now assumes no video frames lost
+    def _decode(frame_id: int) -> Dict[int, bytes]:
+      # Seek to the timestamp because it is much faster than using frame index
+      timestamp_start = frame_id / self._fps
+      # Get multiple frames for caching, to mask decoding latency
+      buf, _ = (
+        ffmpeg.input(
+          filename=self._video_path,
+          hwaccel=hwaccel,
+          ss=timestamp_start,
+        )
+        .output(
+          'pipe:',
+          format='image2pipe',
+          vframes=self._num_prefetch_frames,
+        )
+        .run(capture_stdout=True, quiet=True)
+      )
+      # Split continuous images buffer of jpeg-encoded frames by known end-of-image delimeter
+      new_cache = dict(
+        zip(
+          range(frame_id, frame_id + self._num_prefetch_frames),
+          map(lambda frame: frame + EOI, buf.split(EOI)[:-1]),
+        )
+      )
+      return new_cache
+
     self._cache = Cache(
-      fetch_fn=self._decode,
+      fetch_fn=_decode,
       fetch_offset=round(self._num_prefetch_frames / 3),
     )
     self._cache.start()
@@ -106,7 +132,7 @@ class VideoComponent(BaseComponent):
     # Create layout with timestamp display
     self._image = dcc.Graph(
       figure=self._fig,
-      id='%s-video' % (self._unique_id),
+      id='%s-video' % (unique_id),
       config={'displayModeBar': False, 'responsive': True},
       clear_on_unhover=True,
       style={
@@ -116,7 +142,7 @@ class VideoComponent(BaseComponent):
       },
     )
     self._timestamp_display = html.Div(
-      id='%s-timestamp' % (self._unique_id),
+      id='%s-timestamp' % (unique_id),
       className='text-center small text-muted',
       style={'fontSize': '11px', 'height': '20px', 'lineHeight': '20px'},
     )
@@ -124,46 +150,27 @@ class VideoComponent(BaseComponent):
     self._layout = dbc.Col(
       [
         dcc.Loading(
-          id='%s-loader' % (self._unique_id),
+          id='%s-loader' % (unique_id),
           children=[self._image, self._timestamp_display],
           type='default',
           # target_components={"%s-video"%(self._unique_id): "figure"}
         )
       ],
-      width=self._col_width,
+      width=col_width,
     )
 
-    self._activate_callbacks()
+    super().__init__(unique_id=unique_id, col_width=col_width)
 
-  def _decode(self, frame_id: int) -> Dict[int, bytes]:
-    # Seek to the timestamp because it is much faster than using frame index
-    # TODO: get the timestamp from the HDF5? Now assumes no video frames lost
-    timestamp_start = frame_id / self._fps
-    # Get multiple frames for caching, to mask decoding latency
-    buf, _ = (
-      ffmpeg.input(
-        filename=self._video_path,
-        hwaccel='d3d12va',
-        ss=timestamp_start,
-      )
-      .output(
-        'pipe:',
-        format='image2pipe',
-        vframes=self._num_prefetch_frames,
-      )
-      .run(capture_stdout=True, quiet=True)
-    )
-    # Split continuous images buffer of jpeg-encoded frames by known end-of-image delimeter
-    new_cache = dict(
-      zip(
-        range(frame_id, frame_id + self._num_prefetch_frames),
-        map(lambda frame: frame + EOI, buf.split(EOI)[:-1]),
-      )
-    )
-    return new_cache
+  def read_data(self):
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
+      try:
+        self._timestamps = hdf5[self._time_hdf5_path][:]
+        self._sequence = hdf5[self._sequence_hdf5_path][:]
+      except Exception as e:
+        print(f'Error reading timestamps for cameras: {e}', flush=True)
 
   def _get_frame(self, frame_id: int) -> bytes:
-    """Get frame at specific index"""
+    """Get video frame at a specific index."""
     # Ensure we don't go beyond bounds
     if frame_id < 0:
       frame_id = 0
@@ -190,55 +197,42 @@ class VideoComponent(BaseComponent):
 
     return width, height, fps, num_frames
 
-  def get_frame_for_timestamp(self, target_timestamp: float) -> int:
-    """Find the frame index closest to a given timestamp with offset"""
-    if self._time is not None:
-      time_diffs = np.abs(self._time - target_timestamp)
+  def _get_frame_for_timestamp(self, target_timestamp: float) -> int:
+    """Find the frame index closest to a given timestamp with offset."""
+    if self._timestamps is not None:
+      time_diffs = np.abs(self._timestamps - target_timestamp)
       closest_idx = np.argmin(time_diffs)
       # No offset for regular cameras
       return int(closest_idx)
     else:
       return 0
 
-  def get_timestamp_at_frame(self, frame_index: int) -> float:
-    """Get the timestamp for a given frame"""
-    if self._time is not None and frame_index < len(self._time):
-      return self._time[frame_index].item()
+  def _get_timestamp_at_frame(self, frame_index: int) -> float:
+    """Get the timestamp for a given frame."""
+    if self._timestamps is not None and frame_index < len(self._timestamps):
+      return self._timestamps[frame_index].item()
     else:
       return 0.0
 
-  def _read_sync_metadata(self):
-    """Reads synchronization metadata from HDF5 file"""
-    with h5py.File(self._hdf5_path, 'r') as hdf5:
-      try:
-        self._time = hdf5[self._time_hdf5_path][:]
-        self._sequence = hdf5[self._sequence_hdf5_path][:]
-      except Exception as e:
-        print(f'Error reading timestamps for cameras: {e}')
-
   def get_sync_info(self):
-    """Return synchronization info for this component"""
     return {
       'type': 'camera',
       'unique_id': self._unique_id,
-      'toa_s': self._time,
+      'toa_s': self._timestamps,
       'frame_sequence_ids': self._sequence,
     }
 
-  def set_truncation_points(self, start_frame: int, end_frame: int):
-    """Set truncation points for this video"""
-    self._start_frame = int(max(0, start_frame))
-    self._end_frame = int(min(self._total_frames - 1, end_frame))
+  def set_truncation_points(self, start_idx: int, end_idx: int):
+    self._start_frame = int(max(0, start_idx))
+    self._end_frame = int(min(self._total_frames - 1, end_idx))
     self._truncated_frame_count = self._end_frame - self._start_frame + 1
-    print(f'{self._legend_name}: Start frame = {self._start_frame}')
+    print(f'{self._legend_name}: Start frame = {self._start_frame}', flush=True)
 
-  def get_truncated_frame_count(self):
-    """Get number of frames after truncation"""
+  def get_truncated_frame_count(self) -> int:
+    """Get number of frames after truncation."""
     return int(self._truncated_frame_count)
 
-  # Callback definition must be wrapped inside an object method
-  #   to get access to the class instance object with reference to corresponding file.
-  def _activate_callbacks(self):
+  def activate_callbacks(self):
     @app.callback(
       Output('%s-video' % (self._unique_id), 'figure'),
       Output('%s-timestamp' % (self._unique_id), 'children'),
@@ -256,7 +250,7 @@ class VideoComponent(BaseComponent):
         else:
           # Other cameras and eye: find frame matching sync timestamp
           if sync_timestamp is not None:
-            frame_id = self.get_frame_for_timestamp(sync_timestamp)
+            frame_id = self._get_frame_for_timestamp(sync_timestamp)
           else:
             frame_id = self._start_frame + slider_position
 
@@ -265,7 +259,7 @@ class VideoComponent(BaseComponent):
         fig['data'][0]['source'] = 'data:image/jpeg;base64,%s' % base64.b64encode(img).decode('utf-8')
 
         # Get timestamp for display
-        timestamp = self.get_timestamp_at_frame(frame_id)
+        timestamp = self._get_timestamp_at_frame(frame_id)
         timestamp_text = f'toa_s: {timestamp:.5f} (frame: {frame_id})'
 
         return fig, timestamp_text

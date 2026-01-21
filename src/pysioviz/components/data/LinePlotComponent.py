@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,23 +20,24 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
-from dash import Output, Input, State, dcc, html
-import dash_bootstrap_components as dbc
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 import h5py
 
+from dash import Output, Input, dcc, html
+import dash_bootstrap_components as dbc
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# Used for EMG and pressure insole data
-class LinePlotComponent(BaseComponent):
+from pysioviz.components.data import DataComponent
+from pysioviz.utils.gui_utils import app
+
+
+class LinePlotComponent(DataComponent):
   def __init__(
     self,
     hdf5_path: str,
@@ -51,10 +52,8 @@ class LinePlotComponent(BaseComponent):
     col_width: int = 3,
     num_samples_path: str | None = None,
   ):  # New parameter for burst data (for EMG)
-    super().__init__(unique_id=unique_id, col_width=col_width)
-
     self._y_units = y_units
-
+    self._channel_names = channel_names
     self._hdf5_path = hdf5_path
     self._data_path = data_path
     self._timestamp_path = timestamp_path
@@ -63,62 +62,37 @@ class LinePlotComponent(BaseComponent):
     self._plot_window_seconds = plot_window_seconds
     self._sampling_rate = sampling_rate
 
-    # Read HDF5 data
-    self._read_data()
-
-    # Calculate symmetric y-axis scaling using percentiles
-    # Use percentiles to handle outliers, then create symmetric scale
-    percentile_low = np.percentile(self._data, 1)
-    percentile_high = np.percentile(self._data, 99)
-
-    # Find the maximum absolute value with 2x factor for more headroom
-    max_abs_value = max(abs(2 * percentile_low), abs(2 * percentile_high))
-
-    # Create symmetric range around zero (no additional padding needed with 2x factor)
-    self._y_min = -max_abs_value
-    self._y_max = max_abs_value
-    self._y_range = [-max_abs_value, max_abs_value]
-
-    # Initialize truncation points
-    self._start_idx = 0
-    self._end_idx = len(self._burst_timestamps) - 1 if self._is_burst_data else len(self._sample_timestamps) - 1
-    # Initialize sample indices for burst data
-    if self._is_burst_data:
-      self._start_sample_idx = 0
-      self._end_sample_idx = int(self._cumsum_samples[-1]) - 1
-
-    # Channel names
-    if channel_names is None:
-      self._channel_names = [f'Channel {i + 1}' for i in range(self._num_channels)]
-    else:
-      self._channel_names = channel_names
-
     # Create layout
     self._graph = dcc.Graph(
-      id=f'{self._unique_id}-lineplot',
+      id=f'{unique_id}-lineplot',
       config={'displayModeBar': False},
       clear_on_unhover=True,
     )
 
     self._timestamp_display = html.Div(
-      id=f'{self._unique_id}-timestamp',
+      id=f'{unique_id}-timestamp',
       className='text-center small text-muted',
       style={'fontSize': '12px'},
     )
 
-    self._layout = dbc.Col(
+    self.layout = dbc.Col(
       [
         # html.H6(self._legend_name, className="text-center mb-2"),
         self._graph,
         self._timestamp_display,
       ],
-      width=self._col_width,
+      width=col_width,
     )
 
-    self._activate_callbacks()
+    super().__init__(unique_id=unique_id, col_width=col_width)
 
-  def _read_data(self):
-    """Read data and timestamps from HDF5"""
+  def read_data(self):
+    self._read_timestamps()
+    self._read_data()
+    self._match_data_to_time()
+    self._adjust_plot_ranges()
+
+  def _read_timestamps(self):
     with h5py.File(self._hdf5_path, 'r') as hdf5:
       # Check if we have burst data (num_samples_path provided)
       self._is_burst_data = False
@@ -151,6 +125,8 @@ class LinePlotComponent(BaseComponent):
         else:
           raise ValueError(f'Timestamp path {self._timestamp_path} not found in HDF5')
 
+  def _read_data(self):
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
       # Read data, stacked as list for pressure insoles (left and right channels)
       if isinstance(self._data_path, list):
         # Multiple paths - read each and stack as columns (Pressure insoles)
@@ -183,20 +159,49 @@ class LinePlotComponent(BaseComponent):
         else:
           raise ValueError(f'Data path {self._data_path} not found in HDF5')
 
-      # Verify data length matches expected samples
+  def _match_data_to_time(self):
+    with h5py.File(self._hdf5_path, 'r') as hdf5:
       if self._is_burst_data:
         # EMG
         expected_samples = int(self._cumsum_samples[-1])
         if len(self._data) != expected_samples:
-          raise ValueError(f'Data length ({len(self._data)}) != total samples from bursts ({expected_samples})')
+          raise ValueError(f'Data length ({len(self._data)}) != total samples from bursts ({expected_samples})', flush=True)
       else:
         # Insole
         if len(self._data) != len(self._sample_timestamps):
-          print(f'Warning: Data length ({len(self._data)}) != timestamp length ({len(self._sample_timestamps)})')
+          print(f'Warning: Data length ({len(self._data)}) != timestamp length ({len(self._sample_timestamps)})', flush=True)
           # Truncate to minimum length
           min_length = min(len(self._data), len(self._sample_timestamps))
           self._data = self._data[:min_length]
           self._sample_timestamps = self._sample_timestamps[:min_length]
+
+  def _adjust_plot_ranges(self):
+    # Calculate symmetric y-axis scaling using percentiles
+    # Use percentiles to handle outliers, then create symmetric scale
+    percentile_low = np.percentile(self._data, 1)
+    percentile_high = np.percentile(self._data, 99)
+
+    # Find the maximum absolute value with 2x factor for more headroom
+    max_abs_value = max(abs(2 * percentile_low), abs(2 * percentile_high))
+
+    # Create symmetric range around zero (no additional padding needed with 2x factor)
+    self._y_min = -max_abs_value
+    self._y_max = max_abs_value
+    self._y_range = [-max_abs_value, max_abs_value]
+
+    # Initialize truncation points
+    self._start_idx = 0
+    self._end_idx = len(self._burst_timestamps) - 1 if self._is_burst_data else len(self._sample_timestamps) - 1
+    # Initialize sample indices for burst data
+    if self._is_burst_data:
+      self._start_sample_idx = 0
+      self._end_sample_idx = int(self._cumsum_samples[-1]) - 1
+
+    # Channel names
+    if self._channel_names is None:
+      self._channels = [f'Channel {i + 1}' for i in range(self._num_channels)]
+    else:
+      self._channels = self._channel_names
 
   def _create_interpolated_timestamps(self):
     """Create interpolated timestamps for samples within bursts"""
@@ -244,7 +249,6 @@ class LinePlotComponent(BaseComponent):
       self._sample_timestamps[start_idx:end_idx] = timestamps
 
   def get_sync_info(self):
-    """Return synchronization info for this component"""
     if self._is_burst_data:
       # EMG
       return {
@@ -267,7 +271,6 @@ class LinePlotComponent(BaseComponent):
       }
 
   def set_truncation_points(self, start_idx: int, end_idx: int):
-    """Set truncation points for this data"""
     if self._is_burst_data:
       # EMG
       # For burst data, these are burst indices
@@ -276,15 +279,15 @@ class LinePlotComponent(BaseComponent):
       # Convert to sample indices
       self._start_sample_idx = int(self._cumsum_samples[self._start_idx])
       self._end_sample_idx = int(self._cumsum_samples[self._end_idx + 1]) - 1
-      print(f'{self._legend_name}: Start burst = {self._start_idx}, Start sample = {self._start_sample_idx}')
+      print(f'{self._legend_name}: Start burst = {self._start_idx}, Start sample = {self._start_sample_idx}', flush=True)
     else:
       # Insole
       self._start_idx = int(max(0, start_idx))
       self._end_idx = int(min(len(self._sample_timestamps) - 1, end_idx))
-      print(f'{self._legend_name}: Start index = {self._start_idx}')
+      print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
 
   def get_timestamp_for_sync(self, sync_timestamp: float) -> int:
-    """Find the index closest to a given timestamp with offset"""
+    # Overrides the abstract method.
     if self._is_burst_data:
       # EMG
       # Find closest burst
@@ -309,7 +312,8 @@ class LinePlotComponent(BaseComponent):
         # Ensure within bounds
         offset_idx = max(0, min(len(self._sample_timestamps) - 1, offset_idx))
         return int(offset_idx)
-    return 0
+      else:
+        return 0
 
   def _create_figure(self, center_idx: int):
     """Create the line plot figure for the given center index"""
@@ -336,7 +340,7 @@ class LinePlotComponent(BaseComponent):
       cols=1,
       shared_xaxes=True,
       vertical_spacing=0.02,
-      subplot_titles=self._channel_names,
+      subplot_titles=self._channels,
     )
 
     # Add traces for each channel
@@ -351,7 +355,7 @@ class LinePlotComponent(BaseComponent):
           x=time_slice,
           y=channel_data,
           mode='lines',
-          name=self._channel_names[i],
+          name=self._channels[i],
           line=dict(width=1),
         ),
         row=i + 1,
@@ -392,7 +396,7 @@ class LinePlotComponent(BaseComponent):
 
     return fig
 
-  def _activate_callbacks(self):
+  def activate_callbacks(self):
     @app.callback(
       Output(f'{self._unique_id}-lineplot', 'figure'),
       Output(f'{self._unique_id}-timestamp', 'children'),

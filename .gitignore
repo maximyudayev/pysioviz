@@ -3,11 +3,14 @@
 __pycache__
 *.pyc
 *.asv
+*.egg-info/
+.ruff_cache/
 
 # Data
 ###################################
-data/
+/data/
 .venv/
 
 # VS Code
 ###################################
+src/pysioviz/components/data/obsolete/

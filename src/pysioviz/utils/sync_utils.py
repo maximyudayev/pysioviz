@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,25 +20,25 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from components import *
 import numpy as np
-from typing import List, Mapping
+
+from pysioviz.components.data import *
 
 
 def calculate_truncation_points(
-  camera_components: List[VideoComponent],
-  eye_component: GazeComponent | None = None,
-  emg_components: List[LinePlotComponent] | None = None,
-  skeleton_components: List[SkeletonComponent] | None = None,
-  insole_components: List[LinePlotComponent] | None = None,
-  imu_components: List[IMUComponent] | None = None,
+  camera_components: list[VideoComponent],
+  eye_component: VideoComponent | None = None,
+  emg_components: list[LinePlotComponent] | None = None,
+  skeleton_components: list[SkeletonComponent] | None = None,
+  insole_components: list[LinePlotComponent] | None = None,
+  imu_components: list[ImuComponent] | None = None,
   baseline_frame: int = 100,
-) -> Mapping:
+) -> dict[str, tuple[int, int]]:
   """
   Calculate truncation points using reference camera (Camera 1) as baseline.
 
@@ -268,13 +268,12 @@ def calculate_truncation_points(
   return truncation_points
 
 
-def apply_truncation(components, truncation_points):
-  """
-  Apply truncation points to all components.
+def apply_truncation(components: list[DataComponent], truncation_points: dict[str, tuple[int, int]]):
+  """Apply truncation points to all data components.
 
   Args:
-      components: List of VideoComponent, LinePlotComponent, SkeletonComponent, and IMUComponent instances
-      truncation_points: Dict of truncation points from calculate_truncation_points
+      components: List of `DataComponent`.
+      truncation_points: Mapping of truncation points from `calculate_truncation_points`.
   """
   for component in components:
     # Use string key to look up truncation points

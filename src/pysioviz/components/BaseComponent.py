@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
@@ -29,29 +29,24 @@ from abc import ABC, abstractmethod
 import dash_bootstrap_components as dbc
 
 
-#############################################
-#############################################
-# Interface class to visualize Producer data.
-#############################################
-#############################################
 class BaseComponent(ABC):
   def __init__(self, unique_id: str, col_width: int):
     self._col_width = col_width
     self._unique_id = unique_id
-    self._sync_offset = 0  # Initialize sync offset, only relevant for data components, not the control components
+    self.activate_callbacks()
 
   @property
   def layout(self) -> dbc.Col:
     return self._layout
 
+  @layout.setter
+  def layout(self, value: dbc.Col):
+    self._layout = value
+
   @abstractmethod
-  def _activate_callbacks(self) -> None:
+  def activate_callbacks(self) -> None:
+    """Register callbacks to update figure content.
+    
+    Callback definition must be wrapped inside an object method 
+    to get access to the class instance object with reference to corresponding file."""
     pass
-
-  def set_sync_offset(self, offset: int):
-    """Set synchronization offset for this component"""
-    self._sync_offset = int(offset)
-
-  def get_sync_offset(self):
-    """Get current synchronization offset"""
-    return self._sync_offset

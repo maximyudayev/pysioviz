@@ -1,3 +1,59 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pysioviz"
+dynamic = ["version"]
+requires-python = ">=3.7"
+authors = [
+  { name="Maxim Yudayev", email="maxim.yudayev@gmail.com" },
+  { name="e-Media Research Lab @ KU Leuven", email="emedia@kuleuven.be" },
+]
+description = "Unified visualization dashboard for analysis and annotation of multimodal physiological sensor data"
+keywords = ["multimodal", "gui", "embedded ai", "wearables", "sensors", "physiology"]
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Healthcare Industry",
+  "Intended Audience :: Education",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Topic :: Scientific/Engineering :: Visualization",
+  "Topic :: Software Development :: Libraries :: Application Frameworks"
+]
+dependencies = [
+  "numpy",
+  "pandas",
+  "ffmpeg-python",
+  "h5py",
+  "pyyaml",
+  "pyusb",
+  "pyserial",
+  "openpyxl",
+  "orjson",
+  "dash",
+  "dash-bootstrap-components",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "pysioviz.__version__.__version__"}
+
+[project.urls]
+# Homepage = "https://yudayev.com/hermes"
+# Documentation = "https://yudayev.com/hermes"
+Repository = "https://github.com/maximyudayev/pysioviz.git"
+Issues = "https://github.com/maximyudayev/pysioviz/issues"
+Changelog = "https://github.com/maximyudayev/pysioviz/blob/main/CHANGELOG.md"
+
+
 [tool.ruff]
 indent-width = 2
 line-length = 120

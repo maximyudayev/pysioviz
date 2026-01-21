@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,44 +20,42 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from .BaseComponent import BaseComponent
-from utils.gui_utils import app
 from dash import html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 
+from pysioviz.components import BaseComponent
+from pysioviz.components.data import VideoComponent
+from pysioviz.utils.gui_utils import app
+
 
 class FrameSliderComponent(BaseComponent):
-  """
-  FrameSliderComponent: Frame navigation and control component
+  """Frame navigation and control component.
 
-  - Main frame slider with markers
-  - Fine control slider with adjustable window
-  - Frame increment/decrement buttons
-  - Keyboard navigation (arrow keys, Page Up/Down)
-  - Time display
-
+  - Main frame slider with markers.
+  - Fine control slider with adjustable window.
+  - Frame increment/decrement buttons.
+  - Keyboard navigation (arrow keys, page up/down).
+  - Time display.
   """
 
-  def __init__(self, total_frames: int, fps: float, reference_camera):
-    """
-    Frame navigation control component.
+  def __init__(self, total_frames: int, fps: float, reference_camera: VideoComponent):
+    """Frame navigation control component.
 
     Args:
-        total_frames: Total frames in reference camera
-        fps: Frames per second
-        reference_camera: Reference camera component for sync
+        total_frames: Total frames in reference camera.
+        fps: Frames per second.
+        reference_camera: Reference camera component for sync.
     """
-    super().__init__(unique_id='frame_slider', col_width=12)
     self._total_frames = total_frames
     self._fps = fps
     self._reference_camera = reference_camera
     self._create_layout()
-    self._activate_callbacks()
+    super().__init__(unique_id='frame_slider', col_width=12)
 
   def _create_layout(self):
     """Create frame control UI with collapsible design."""
@@ -306,10 +304,7 @@ class FrameSliderComponent(BaseComponent):
       },
     )
 
-  def _activate_callbacks(self):
-    """Register all callbacks for this component."""
-
-    # Toggle controls visibility
+  def activate_callbacks(self):
     @app.callback(
       Output('frame-controls-content', 'style'),
       Output('main-content', 'style', allow_duplicate=True),
@@ -321,6 +316,8 @@ class FrameSliderComponent(BaseComponent):
       prevent_initial_call=True,
     )
     def toggle_frame_controls(n_clicks, is_visible):
+      """Toggle controls visibility."""
+
       if n_clicks is None:
         n_clicks = 0
 
@@ -380,7 +377,6 @@ class FrameSliderComponent(BaseComponent):
         base_button_style,
       )
 
-    # Update fine slider window size
     @app.callback(
       Output('fine-slider-window', 'data'),
       Output('fine-frame-slider', 'min'),
@@ -392,6 +388,8 @@ class FrameSliderComponent(BaseComponent):
       prevent_initial_call=True,
     )
     def update_fine_slider_window(window_size, current_fine_value):
+      """Update fine slider window size."""
+
       # Only show marks at 0%, 25%, 50%, 75%, and 100%
       marks = {
         -window_size: {
@@ -415,7 +413,6 @@ class FrameSliderComponent(BaseComponent):
 
       return window_size, -window_size, window_size, marks, new_fine_value
 
-    # Main navigation callback
     @app.callback(
       Output('frame-id', 'data'),
       Output('frame-slider', 'value'),
@@ -449,6 +446,8 @@ class FrameSliderComponent(BaseComponent):
       fine_center,
       sync_timestamp,
     ):
+      """Main navigation callback."""
+
       ctx = callback_context
 
       # Initialize with safe defaults
@@ -552,7 +551,7 @@ class FrameSliderComponent(BaseComponent):
           new_center = fine_center if fine_center is not None else current_frame
 
       # Get sync timestamp from reference camera
-      sync_timestamp = self._reference_camera.get_timestamp_at_frame(self._reference_camera._start_frame + frame)
+      sync_timestamp = self._reference_camera._get_timestamp_at_frame(self._reference_camera._start_frame + frame)
 
       # Calculate time display
       time_sec = frame / self._fps if self._fps > 0 else 0

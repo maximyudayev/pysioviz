@@ -1,6 +1,6 @@
 ############
 #
-# Copyright (c) 2024 Maxim Yudayev and KU Leuven eMedia Lab
+# Copyright (c) 2026 Maxim Yudayev and KU Leuven eMedia Lab
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,23 +20,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# Created 2024-2026 for the KU Leuven AidWear, AidFOG, and RevalExo projects
 # by Maxim Yudayev [https://yudayev.com].
 #
 # ############
 
-from dash import Dash
-from flask import Flask
-import dash_bootstrap_components as dbc
-import os
+from dataclasses import dataclass
 
-current_dir = os.path.dirname(os.path.abspath(__file__))  # utils folder
-parent_dir = os.path.dirname(current_dir)  # AidWear folder
-assets_folder = os.path.join(parent_dir, 'annotation', 'assets')
-server = Flask(__name__)
-app = Dash(
-  __name__,
-  server=server,
-  assets_folder=assets_folder,
-  external_stylesheets=[dbc.themes.BOOTSTRAP],
-)
+@dataclass
+class Annotation:
+  label: str
+  value: str
+
+@dataclass
+class DataRequest:
+  """Object wrapping user's element of interest into a fetch request."""
+
+  key: str
+  timestamp: float

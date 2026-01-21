@@ -1,0 +1,84 @@
+name: "\U0001F41B Bug"
+description: Report an issue when running the GUI
+title: "[BUG]: <catchy title>"
+labels: ["bug", "needs triage"]
+assignees:
+  - maximyudayev
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Let's get this solved so you can carry on ASAP!
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+      - label: I have searched the existing issues
+        required: true
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: What happened?
+      description: Describe what the bug is clearly and concisely.
+      placeholder: e.g. Video files do not display in their corresponding placeholders.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: What did you expect to happen?
+      description: Describe at a high-level, from the point of user, how you expected it to work.
+      placeholder: e.g. I expected that after launching the application on the local device, files will be automatically found.
+  - type: textarea
+    id: error-log
+    attributes:
+      label: Error message
+      description: Copy-paste the error from the terminal log. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: how-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Describe what steps led to the behavior. Add the CLI arguments you used to launch the system.
+      placeholder: |
+        1. Set CLI arguments to '...'
+        2. Click on '....'
+        3. Run for '....'
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Code version
+      description: What version of our software are you running? (i.e. release or branch or commit).
+      placeholder: main
+      value: main
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: What operating system are you seeing the problem on?
+      multiple: false
+      options:
+        - Windows
+        - Linux
+        - macOS
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: What is the detailed list of your data files to be visualized and annotated?
+      description: (Optional) Provide additional context about how they were produced and what they contain.
+      placeholder: |
+        1. File formats [e.g. sensor data in HDF5 files with such structure, video <codec> data in <container> file]
+        2. Software [e.g. FFmpeg version, Python version, packages installed with pip or conda, location of data]
+        3. GUI layout [e.g. which components in `main.py` are listed for visualization]
+    validations:
+      required: true
