@@ -29,47 +29,43 @@ from abc import abstractmethod
 import numpy as np
 
 from pysioviz.components import BaseComponent
+from pysioviz.utils.types import AlignmentInfo
 
 
 class DataComponent(BaseComponent):
-  def __init__(self, unique_id: str, col_width: int):
-    self._sync_offset = 0
-    self._timestamps: np.ndarray | None = None
-    self.read_data()
-    super().__init__(unique_id=unique_id, col_width=col_width)
+    def __init__(self, unique_id: str):
+        self._toa_s: np.ndarray | None = None
+        self.read_data()
+        self._align_info = AlignmentInfo(0, len(self._toa_s))
+        super().__init__(unique_id=unique_id)
 
-  @abstractmethod
-  def read_data(self) -> None:
-    """Read the component specific data from the files used in the constructor."""
-    pass
+    @abstractmethod
+    def read_data(self) -> None:
+        """Read the component specific data from the files used in the constructor."""
+        pass
 
-  @abstractmethod
-  def get_sync_info(self) -> dict:
-    """Return synchronization info for this component."""
-    pass
+    @abstractmethod
+    def get_sync_info(self) -> dict:
+        """Return synchronization info for this component."""
+        pass
 
-  @abstractmethod
-  def set_truncation_points(self, start_idx: int, end_idx: int) -> None:
-    """Set truncation points for the modality."""
-    pass
+    def get_frame_for_toa(self, sync_timestamp: float) -> int:
+        """Find the index closest to a given timestamp with offset.
+        
+        TODO: adapt to retrieve only past samples?
+        """
+        time_diffs = np.abs(self._toa_s - sync_timestamp)
+        closest_id = np.argmin(time_diffs).item()
+        # Apply offset
+        offset_id = closest_id + self._align_info.start_id
+        # Ensure within bounds
+        offset_id = max(0, min(len(self._toa_s) - 1, offset_id))
+        return offset_id
 
-  def get_timestamp_for_sync(self, sync_timestamp: float) -> int:
-    """Find the index closest to a given timestamp with offset."""
-    if self._timestamps is not None:
-      time_diffs = np.abs(self._timestamps - sync_timestamp)
-      closest_idx = np.argmin(time_diffs)
-      # Apply offset
-      offset_idx = closest_idx + self._sync_offset
-      # Ensure within bounds
-      offset_idx = max(0, min(len(self._timestamps) - 1, offset_idx))
-      return int(offset_idx)
-    else:
-      return 0
+    def set_align_info(self, alignment_info: AlignmentInfo) -> None:
+        """Set alignment info for the component."""
+        self._align_info = alignment_info
 
-  def set_sync_offset(self, offset: int) -> None:
-    """Set synchronization offset for the component."""
-    self._sync_offset = int(offset)
-
-  def get_sync_offset(self) -> int:
-    """Get current synchronization offset for the component."""
-    return self._sync_offset
+    def get_align_info(self) -> AlignmentInfo:
+        """Get current alignment info for the component."""
+        return self._align_info

@@ -98,15 +98,15 @@ def get_time() -> float:
     return SystemTime().time()
 
 
-def get_time_str(time_s: float = get_time(), format: str = "%Y-%m-%d_%H-%M-%S") -> str:
+def get_time_str(time_s: float = get_time(), format: str = '%Y-%m-%d_%H-%M-%S') -> str:
     """Gets a date string from seconds since epoch.
 
     Args:
         time_s (float, optional): Time since epoch to convert to the human-readable string. Defaults to the current system time.
         format (str, optional): Format to construct the date string. Default to `%Y-%m-%d_%H-%M-%S`.
-    
+
     Returns:
-        str: Formatted date string corresponding to the provided time since epoch. 
+        str: Formatted date string corresponding to the provided time since epoch.
     """
     time_datetime = datetime.fromtimestamp(time_s)
     time_str = time_datetime.strftime(format)
@@ -115,12 +115,12 @@ def get_time_str(time_s: float = get_time(), format: str = "%Y-%m-%d_%H-%M-%S") 
 
 def get_time_s_from_utc_time_no_date_str(
     time_utc_str: str,
-    input_time_format: str = "%H:%M:%S.%f",
+    input_time_format: str = '%H:%M:%S.%f',
     date_utc_str: str | None = None,
-    input_date_format: str = "%Y-%m-%d",
+    input_date_format: str = '%Y-%m-%d',
 ) -> float:
     """Gets local time in seconds since epoch from provided UTC time strings.
-    
+
     Args:
         time_utc_str (str): UTC time string to convert to seconds.
         input_time_format (str, optional): Time string format of the provided time. Defaults to `%H:%M:%S.%f`.
@@ -139,10 +139,8 @@ def get_time_s_from_utc_time_no_date_str(
         date_utc_str = now_utc_datetime.strftime(input_date_format)
 
     # Combine the date and time.
-    utc_str = "%s %s" % (date_utc_str, time_utc_str)
-    utc_datetime = datetime.strptime(
-        utc_str, input_date_format + " " + input_time_format
-    )
+    utc_str = '%s %s' % (date_utc_str, time_utc_str)
+    utc_datetime = datetime.strptime(utc_str, input_date_format + ' ' + input_time_format)
 
     # Convert to local time, then to seconds since epoch.
     utc_datetime = utc_datetime.replace(tzinfo=from_zone)
@@ -152,12 +150,12 @@ def get_time_s_from_utc_time_no_date_str(
 
 def get_time_s_from_local_str(
     time_local_str: str,
-    input_time_format: str = "%H:%M:%S.%f",
+    input_time_format: str = '%H:%M:%S.%f',
     date_local_str: str | None = None,
-    input_date_format: str = "%Y-%m-%d",
+    input_date_format: str = '%Y-%m-%d',
 ) -> float:
     """Gets seconds since epoch from provided local time string.
-    
+
     Args:
         time_local_str (str): local time string to convert to seconds.
         input_time_format (str, optional): Time string format of the provided time. Defaults to `%H:%M:%S.%f`.
@@ -173,9 +171,7 @@ def get_time_s_from_local_str(
         date_local_str = now_local_datetime.strftime(input_date_format)
 
     # Combine the date and time.
-    local_str = "%s %s" % (date_local_str, time_local_str)
-    local_datetime = datetime.strptime(
-        local_str, input_date_format + " " + input_time_format
-    )
+    local_str = '%s %s' % (date_local_str, time_local_str)
+    local_datetime = datetime.strptime(local_str, input_date_format + ' ' + input_time_format)
 
     return local_datetime.timestamp()

@@ -55,7 +55,7 @@ Changelog = "https://github.com/maximyudayev/pysioviz/blob/main/CHANGELOG.md"
 
 
 [tool.ruff]
-indent-width = 2
+indent-width = 4
 line-length = 120
 
 [tool.ruff.format]

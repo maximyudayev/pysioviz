@@ -29,270 +29,269 @@ import numpy as np
 import h5py
 
 from dash import Output, Input, dcc, html
-import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 
 from pysioviz.components.data import DataComponent
 from pysioviz.utils.gui_utils import app
+from pysioviz.utils.types import GlobalVariableId
 
 
 class SkeletonComponent(DataComponent):
-  def __init__(
-    self,
-    hdf5_path: str,
-    position_path: str,
-    pos_counter_path: str,
-    timestamp_path: str,
-    ref_counter_path: str,
-    unique_id: str,
-    legend_name: str,
-    col_width: int = 3,
-  ):
-    self._hdf5_path = hdf5_path
-    self._position_path = position_path
-    self._timestamp_path = timestamp_path
-    self._ref_counter_path = ref_counter_path
-    self._pos_counter_path = pos_counter_path
-    self._legend_name = legend_name
+    def __init__(
+        self,
+        hdf5_path: str,
+        position_path: str,
+        pos_counter_path: str,
+        timestamp_path: str,
+        ref_counter_path: str,
+        unique_id: str,
+        legend_name: str,
+    ):
+        self._hdf5_path = hdf5_path
+        self._position_path = position_path
+        self._timestamp_path = timestamp_path
+        self._ref_counter_path = ref_counter_path
+        self._pos_counter_path = pos_counter_path
+        self._legend_name = legend_name
 
-    # Segment names and indices (BASED ON THE HDF5 FILE DESCRIPTION)
-    self._segment_names = [
-      'Pelvis',
-      'L5',
-      'L3',
-      'T12',
-      'T8',
-      'Neck',
-      'Head',
-      'Right Shoulder',
-      'Right Upper Arm',
-      'Right Forearm',
-      'Right Hand',
-      'Left Shoulder',
-      'Left Upper Arm',
-      'Left Forearm',
-      'Left Hand',
-      'Right Upper Leg',
-      'Right Lower Leg',
-      'Right Foot',
-      'Right Toe',
-      'Left Upper Leg',
-      'Left Lower Leg',
-      'Left Foot',
-      'Left Toe',
-    ]
+        # Segment names and indices (BASED ON THE HDF5 FILE DESCRIPTION)
+        self._segment_names = [
+            'Pelvis',
+            'L5',
+            'L3',
+            'T12',
+            'T8',
+            'Neck',
+            'Head',
+            'Right Shoulder',
+            'Right Upper Arm',
+            'Right Forearm',
+            'Right Hand',
+            'Left Shoulder',
+            'Left Upper Arm',
+            'Left Forearm',
+            'Left Hand',
+            'Right Upper Leg',
+            'Right Lower Leg',
+            'Right Foot',
+            'Right Toe',
+            'Left Upper Leg',
+            'Left Lower Leg',
+            'Left Foot',
+            'Left Toe',
+        ]
 
-    # Define skeletal connections
-    self._connections = [
-      # Spine
-      ('Pelvis', 'L5'),
-      ('L5', 'L3'),
-      ('L3', 'T12'),
-      ('T12', 'T8'),
-      ('T8', 'Neck'),
-      ('Neck', 'Head'),
-      # Right arm
-      ('Neck', 'Right Shoulder'),
-      ('Right Shoulder', 'Right Upper Arm'),
-      ('Right Upper Arm', 'Right Forearm'),
-      ('Right Forearm', 'Right Hand'),
-      # Left arm
-      ('Neck', 'Left Shoulder'),
-      ('Left Shoulder', 'Left Upper Arm'),
-      ('Left Upper Arm', 'Left Forearm'),
-      ('Left Forearm', 'Left Hand'),
-      # Right leg
-      ('Pelvis', 'Right Upper Leg'),
-      ('Right Upper Leg', 'Right Lower Leg'),
-      ('Right Lower Leg', 'Right Foot'),
-      ('Right Foot', 'Right Toe'),
-      # Left leg
-      ('Pelvis', 'Left Upper Leg'),
-      ('Left Upper Leg', 'Left Lower Leg'),
-      ('Left Lower Leg', 'Left Foot'),
-      ('Left Foot', 'Left Toe'),
-    ]
+        # Define skeletal connections
+        self._connections = [
+            # Spine
+            ('Pelvis', 'L5'),
+            ('L5', 'L3'),
+            ('L3', 'T12'),
+            ('T12', 'T8'),
+            ('T8', 'Neck'),
+            ('Neck', 'Head'),
+            # Right arm
+            ('Neck', 'Right Shoulder'),
+            ('Right Shoulder', 'Right Upper Arm'),
+            ('Right Upper Arm', 'Right Forearm'),
+            ('Right Forearm', 'Right Hand'),
+            # Left arm
+            ('Neck', 'Left Shoulder'),
+            ('Left Shoulder', 'Left Upper Arm'),
+            ('Left Upper Arm', 'Left Forearm'),
+            ('Left Forearm', 'Left Hand'),
+            # Right leg
+            ('Pelvis', 'Right Upper Leg'),
+            ('Right Upper Leg', 'Right Lower Leg'),
+            ('Right Lower Leg', 'Right Foot'),
+            ('Right Foot', 'Right Toe'),
+            # Left leg
+            ('Pelvis', 'Left Upper Leg'),
+            ('Left Upper Leg', 'Left Lower Leg'),
+            ('Left Lower Leg', 'Left Foot'),
+            ('Left Foot', 'Left Toe'),
+        ]
 
-    # Read data
-    self.read_data()
-
-    # Initialize truncation points
-    self._start_idx = 0
-    self._end_idx = len(self._timestamps) - 1
-
-    # Create layout
-    self._graph = dcc.Graph(
-      id=f'{unique_id}-skeleton',
-      config={'displayModeBar': False},
-      clear_on_unhover=True,
-    )
-
-    self._timestamp_display = html.Div(
-      id=f'{unique_id}-timestamp',
-      className='text-center small text-muted',
-      style={'fontSize': '12px'},
-    )
-
-    self._layout = dbc.Col(
-      [
-        html.H6(self._legend_name, className='text-center mb-2'),
-        self._graph,
-        self._timestamp_display,
-      ],
-      width=col_width,
-    )
-
-    super().__init__(unique_id=unique_id, col_width=col_width)
-
-  def read_data(self):
-    self._read_timestamps()
-    self._read_data()
-    self._match_data_to_time()
-
-  def _read_timestamps(self):
-    with h5py.File(self._hdf5_path, 'r') as hdf5:
-      if self._timestamp_path in hdf5:
-        self._timestamps = hdf5[self._timestamp_path][:, 0]
-        self._first_timestamp = float(self._timestamps[0])
-        self._last_timestamp = float(self._timestamps[-1])
-      else:
-        raise ValueError(f'Timestamp path {self._timestamp_path} not found in HDF5')
-
-  def _read_data(self):
-    with h5py.File(self._hdf5_path, 'r') as hdf5:
-      if self._position_path in hdf5:
-        self._positions = hdf5[self._position_path][:]
-        if len(self._positions.shape) != 3 or self._positions.shape[2] != 3:
-          raise ValueError(f'Expected position data shape (frames, segments, 3), got {self._positions.shape}')
-      else:
-        raise ValueError(f'Position path {self._position_path} not found in HDF5')
-
-  def _match_data_to_time(self):
-    with h5py.File(self._hdf5_path, 'r') as hdf5:
-      ref_counters = hdf5[self._ref_counter_path][:, 0]
-      pos_counters = hdf5[self._pos_counter_path][:, 0]
-
-      # Create a mapping from values to their first occurrence index in position counters
-      _, first_indices = np.unique(pos_counters, return_index=True)
-      value_to_first_idx = dict(zip(pos_counters[first_indices], first_indices))
-
-      # Look up each element of reference counters
-      matches = np.array([value_to_first_idx.get(val, -1) for val in ref_counters])
-      self._timestamps = self._timestamps[matches >= 0]
-      self._positions = self._positions[matches[matches >= 0]]
-      print(f'Position data length ({len(self._positions)}) ?= timestamp length ({len(self._timestamps)})', flush=True)
-
-  def get_sync_info(self):
-    return {
-      'type': 'skeleton',
-      'unique_id': self._unique_id,
-      'first_timestamp': self._first_timestamp,
-      'last_timestamp': self._last_timestamp,
-      'timestamps': self._timestamps,
-    }
-
-  def set_truncation_points(self, start_idx: int, end_idx: int):
-    self._start_idx = int(max(0, start_idx))
-    self._end_idx = int(min(len(self._timestamps) - 1, end_idx))
-    print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
-
-  def _create_figure(self, frame_idx: int) -> go.Figure:
-    # Ensure frame_idx is within bounds
-    frame_idx = max(0, min(frame_idx, len(self._positions) - 1))
-
-    # Get positions for this frame
-    positions = self._positions[frame_idx]  # Shape: (num_segments, 3)
-
-    # Create 3D scatter plot
-    fig = go.Figure()
-
-    # Add joints
-    fig.add_trace(
-      go.Scatter3d(
-        x=positions[:, 0],
-        y=positions[:, 1],
-        z=positions[:, 2],
-        mode='markers',
-        marker=dict(size=6, color='blue'),
-        text=self._segment_names,
-        hovertemplate='%{text}<br>X: %{x:.1f}<br>Y: %{y:.1f}<br>Z: %{z:.1f}<extra></extra>',
-        name='Joints',
-      )
-    )
-
-    # Add bones
-    for conn in self._connections:
-      start_idx = self._segment_names.index(conn[0])
-      end_idx = self._segment_names.index(conn[1])
-
-      fig.add_trace(
-        go.Scatter3d(
-          x=[positions[start_idx, 0], positions[end_idx, 0]],
-          y=[positions[start_idx, 1], positions[end_idx, 1]],
-          z=[positions[start_idx, 2], positions[end_idx, 2]],
-          mode='lines',
-          line=dict(color='gray', width=4),
-          showlegend=False,
-          hoverinfo='skip',
+        # Create layout
+        self._graph = dcc.Graph(
+            id=f'{unique_id}-skeleton',
+            responsive=True,
+            clear_on_unhover=True,
+            style={
+                "width": "100%",
+                "height": "60vh",
+            },
         )
-      )
 
-    # Update layout
-    title = self._legend_name
-    if self._sync_offset != 0:
-      title += f' [offset: {self._sync_offset:+d}]'
+        self._timestamp_display = html.Div(
+            id=f'{unique_id}-timestamp',
+            className='text-center small text-muted',
+            style={
+                'fontSize': '11px',
+                'height': '20px',
+                'lineHeight': '20px'
+            },
+        )
 
-    fig.update_layout(
-      title_text=title,
-      scene=dict(
-        xaxis_title='X (m)',
-        yaxis_title='Y (m)',
-        zaxis_title='Z (m)',
-        aspectmode='data',
-        camera=dict(eye=dict(x=2.5, y=2.5, z=2.0)),
-      ),
-      showlegend=False,
-      margin=dict(l=10, r=10, t=10, b=10),
-      height=400,
-      width=400,
-    )
+        self._layout = html.Div(
+            [
+                html.H6(self._legend_name, className='text-center mb-2'),
+                self._graph,
+                self._timestamp_display,
+            ],
+            style={
+                'width': '100%',
+            }
+        )
 
-    return fig
+        super().__init__(unique_id=unique_id)
 
-  def activate_callbacks(self):
-    @app.callback(
-      Output(f'{self._unique_id}-skeleton', 'figure'),
-      Output(f'{self._unique_id}-timestamp', 'children'),
-      Input('sync-timestamp', 'data'),
-      Input('offset-update-trigger', 'data'),
-      prevent_initial_call=False,
-    )
-    def update_skeleton(sync_timestamp, offset_trigger):
-      try:
-        if sync_timestamp is not None:
-          # Find the index matching the sync timestamp
-          current_idx = self.get_timestamp_for_sync(sync_timestamp)
+    def read_data(self):
+        self._read_timestamps()
+        self._read_data()
+        self._match_data_to_time()
 
-          # Create the figure
-          fig = self._create_figure(current_idx)
+    def _read_timestamps(self):
+        with h5py.File(self._hdf5_path, 'r') as hdf5:
+            if self._timestamp_path in hdf5:
+                self._toa_s = hdf5[self._timestamp_path][:, 0]
+                self._first_timestamp = float(self._toa_s[0])
+                self._last_timestamp = float(self._toa_s[-1])
+            else:
+                raise ValueError(f'Timestamp path {self._timestamp_path} not found in HDF5')
 
-          # Get timestamp for display
-          timestamp = self._timestamps[current_idx] if current_idx < len(self._timestamps) else 0
-          timestamp_float = float(timestamp)
-          timestamp_text = f'timestamp_s: {timestamp_float:.7f} (index: {current_idx})'
+    def _read_data(self):
+        with h5py.File(self._hdf5_path, 'r') as hdf5:
+            if self._position_path in hdf5:
+                self._positions = hdf5[self._position_path][:]
+                if len(self._positions.shape) != 3 or self._positions.shape[2] != 3:
+                    raise ValueError(f'Expected position data shape (frames, segments, 3), got {self._positions.shape}')
+            else:
+                raise ValueError(f'Position path {self._position_path} not found in HDF5')
 
-          return fig, timestamp_text
-        else:
-          # Show initial data at start_idx if no sync
-          fig = self._create_figure(self._start_idx)
-          timestamp = self._timestamps[self._start_idx] if self._start_idx < len(self._timestamps) else 0
-          timestamp_float = float(timestamp)
-          timestamp_text = f'timestamp_s: {timestamp_float:.7f} (index: {self._start_idx})'
-          return fig, timestamp_text
+    def _match_data_to_time(self):
+        with h5py.File(self._hdf5_path, 'r') as hdf5:
+            ref_counters = hdf5[self._ref_counter_path][:, 0]
+            pos_counters = hdf5[self._pos_counter_path][:, 0]
 
-      except Exception as e:
-        print(f'Error updating skeleton: {e}', flush=True)
-        import traceback
+            # Create a mapping from values to their first occurrence index in position counters
+            _, first_indices = np.unique(pos_counters, return_index=True)
+            value_to_first_idx = dict(zip(pos_counters[first_indices], first_indices))
 
-        traceback.print_exc()
-        return go.Figure(), 'Error'
+            # Look up each element of reference counters
+            matches = np.array([value_to_first_idx.get(val, -1) for val in ref_counters])
+            self._toa_s = self._toa_s[matches >= 0]
+            self._positions = self._positions[matches[matches >= 0]]
+
+            self._start_idx = 0
+            self._end_idx = len(self._toa_s) - 1
+            print(f'Position data length ({len(self._positions)}) ?= timestamp length ({len(self._toa_s)})', flush=True)
+
+    def get_sync_info(self):
+        return {
+            'type': 'skeleton',
+            'unique_id': self._unique_id,
+            'first_timestamp': self._first_timestamp,
+            'last_timestamp': self._last_timestamp,
+            'timestamps': self._toa_s,
+        }
+
+    def set_truncation_points(self, start_idx: int, end_idx: int):
+        self._start_idx = int(max(0, start_idx))
+        self._end_idx = int(min(len(self._toa_s) - 1, end_idx))
+        print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
+
+    def _create_figure(self, frame_idx: int) -> go.Figure:
+        # Ensure frame_idx is within bounds
+        frame_idx = max(0, min(frame_idx, len(self._positions) - 1))
+
+        # Get positions for this frame
+        positions = self._positions[frame_idx]  # Shape: (num_segments, 3)
+
+        # Create 3D scatter plot
+        fig = go.Figure()
+
+        # Add joints
+        fig.add_trace(
+            go.Scatter3d(
+                x=positions[:, 0],
+                y=positions[:, 1],
+                z=positions[:, 2],
+                mode='markers',
+                marker=dict(size=6, color='blue'),
+                text=self._segment_names,
+                hovertemplate='%{text}<br>X: %{x:.1f}<br>Y: %{y:.1f}<br>Z: %{z:.1f}<extra></extra>',
+                name='Joints',
+            )
+        )
+
+        # Add bones
+        for conn in self._connections:
+            start_idx = self._segment_names.index(conn[0])
+            end_idx = self._segment_names.index(conn[1])
+
+            fig.add_trace(
+                go.Scatter3d(
+                    x=[positions[start_idx, 0], positions[end_idx, 0]],
+                    y=[positions[start_idx, 1], positions[end_idx, 1]],
+                    z=[positions[start_idx, 2], positions[end_idx, 2]],
+                    mode='lines',
+                    line=dict(color='gray', width=4),
+                    showlegend=False,
+                    hoverinfo='skip',
+                )
+            )
+
+        return fig
+
+    def activate_callbacks(self):
+        @app.callback(
+            Output(f'{self._unique_id}-skeleton', 'figure'),
+            Output(f'{self._unique_id}-timestamp', 'children'),
+            Input(GlobalVariableId.SYNC_TIMESTAMP.value, 'data'),
+            Input('offset-update-trigger', 'data'),
+        )
+        def update_skeleton(sync_timestamp, offset_trigger):
+            # TODO: use offset.
+            try:
+                if sync_timestamp is not None:
+                    # Find the index matching the sync timestamp
+                    current_idx = self.get_frame_for_toa(sync_timestamp)
+
+                    # Create the figure
+                    fig = self._create_figure(current_idx)
+
+                    # Get timestamp for display
+                    timestamp = self._toa_s[current_idx] if current_idx < len(self._toa_s) else 0
+                    timestamp_float = float(timestamp)
+                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {current_idx}) [offset: {self._align_info.start_id:+d}]'
+
+                else:
+                    # Show initial data at start_idx if no sync
+                    fig = self._create_figure(self._start_idx)
+                    timestamp = self._toa_s[self._start_idx] if self._start_idx < len(self._toa_s) else 0
+                    timestamp_float = float(timestamp)
+                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {self._start_idx}) [offset: {self._align_info.start_id:+d}]'
+
+                # Update layout
+                fig.update_layout(
+                    scene=dict(
+                        xaxis_title='X (m)',
+                        yaxis_title='Y (m)',
+                        zaxis_title='Z (m)',
+                        aspectmode='data',
+                        camera=dict(eye=dict(x=2.0, y=2.0, z=2.0)),
+                    ),
+                    showlegend=False,
+                    autosize=True,
+                    margin=dict(l=0, r=0, t=0, b=0),
+                )
+
+                return fig, timestamp_text
+
+            except Exception as e:
+                print(f'Error updating skeleton: {e}', flush=True)
+                import traceback
+
+                traceback.print_exc()
+                return go.Figure(), 'Error'

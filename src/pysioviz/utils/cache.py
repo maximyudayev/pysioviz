@@ -25,7 +25,7 @@
 #
 # ############
 
-import queue
+from queue import Queue, Empty
 from typing import Dict, Any, Callable
 from collections import defaultdict
 import threading
@@ -35,91 +35,94 @@ from pysioviz.utils.types import DataRequest
 
 
 class Cache:
-  """Caching module prefetches segments of data that has long IO, for more responsive experience."""
+    """Caching module prefetches segments of data that has long IO, for more responsive experience.
 
-  def __init__(self, fetch_fn: Callable[[Any], Dict[Any, Any]], fetch_offset: int):
-    """Constructor of the Cache component for long IO prefetching to mask latency behind wide bandwidth.
-
-    Args:
-        fetch_fn (Callable[[Any], Dict[Any, Any]]): User-provided function with long IO to use for asynchronous prefetching (database operation, API call, FFmpeg decoding, etc.).
-        fetch_offset (int): How many elements before the requested to cache in case of jumping backwards during playback.
+    TODO: run the manager as a subprocess instead of thread.
     """
-    self._cache: Dict[Any, Any] = {}
-    self._fetch_fn = fetch_fn
-    self._fetch_offset = fetch_offset
-    self._request_queue: queue.Queue[DataRequest] = queue.Queue()
-    self._data_events: Dict[Any, threading.Event] = defaultdict(threading.Event)
 
-  def start(self):
-    """Start the background cache management thread."""
-    self._cache_task = threading.Thread(target=self._run_cache_manager)
-    self._cache_task.start()
+    def __init__(self, fetch_fn: Callable[[Any], Dict[Any, Any]], fetch_offset: int):
+        """Constructor of the Cache component for long IO prefetching to mask latency behind wide bandwidth.
 
-  def join(self):
-    """Wait on the background cache management thread."""
-    if hasattr(self, 'cache_task'):
-      self._cache_task.join()
+        Args:
+            fetch_fn (Callable[[Any], Dict[Any, Any]]): User-provided function with long IO to use for asynchronous prefetching (database operation, API call, FFmpeg decoding, etc.).
+            fetch_offset (int): How many elements before the requested to cache in case of jumping backwards during playback.
+        """
+        self._cache: Dict[Any, Any] = {}
+        self._fetch_fn = fetch_fn
+        self._fetch_offset = fetch_offset
+        self._request_queue: Queue[DataRequest] = Queue()
+        self._data_events: Dict[Any, threading.Event] = defaultdict(threading.Event)
 
-  def get_data(self, key: Any) -> Any:
-    """Request data from the cache.
+    def start(self):
+        """Start the background cache management thread."""
+        self._cache_task = threading.Thread(target=self._run_cache_manager)
+        self._cache_task.start()
 
-    Checks if data is already in the cache.
-    Adds a request to the queue for background processing.
-    Returns immediately if requested data is cached, otherwise waits for the background task to fetch it.
-    Stalls until the data is available in the cache for the given key.
+    def join(self):
+        """Wait on the background cache management thread."""
+        if hasattr(self, 'cache_task'):
+            self._cache_task.join()
 
-    Args:
-        key (Any): Unique key correctly identifying the element of interest in the user-provided fetch function.
+    def get_data(self, key: Any) -> Any:
+        """Request data from the cache.
 
-    Returns:
-        Any: The requested element of interest.
-    """
-    if key in self._cache:
-      return self._cache[key]
+        Checks if data is already in the cache.
+        Adds a request to the queue for background processing.
+        Returns immediately if requested data is cached, otherwise waits for the background task to fetch it.
+        Stalls until the data is available in the cache for the given key.
 
-    request = DataRequest(key, get_time())
-    self._request_queue.put(request)
+        Args:
+            key (Any): Unique key correctly identifying the element of interest in the user-provided fetch function.
 
-    event = self._data_events[key]
-    event.wait()
-    del self._data_events[key]
-    return self._cache[key]
+        Returns:
+            Any: The requested element of interest.
+        """
+        if key in self._cache:
+            return self._cache[key]
 
-  def _run_cache_manager(self):
-    """Main loop of the background continuous cache management thread.
+        request = DataRequest(key, get_time())
+        self._request_queue.put(request)
 
-    Processes requests from the user and prefetches most likely used next segment of elements.
-    """
-    while True:
-      try:
-        request = self._request_queue.get(timeout=None)
-        self._process_request(request)
-      except queue.Empty:
-        print(f'Timeout: no new cache fill request')
-      except Exception as e:
-        print(f'Error in cache manager: {e}')
+        event = self._data_events[key]
+        event.wait()
+        del self._data_events[key]
+        return self._cache[key]
 
-  def _process_request(self, request: DataRequest):
-    """Process user request for the next element of interest.
+    def _run_cache_manager(self):
+        """Main loop of the background continuous cache management thread.
 
-    Runs user-provided long-IO fetch procedure if the data is not immediately available in cache or isn't already being fetched.
-    Updates the cache and notifies all watchers waiting for this element.
+        Processes requests from the user and prefetches most likely used next segment of elements.
+        """
+        while True:
+            try:
+                request = self._request_queue.get(timeout=None)
+                self._process_request(request)
+            except Empty:
+                print(f'Timeout: no new cache fill request')
+            except Exception as e:
+                print(f'Error in cache manager: {e}')
 
-    Args:
-        request (DataRequest): User-requested element of interest.
-    """
-    if request.key not in self._cache:
-      self._cache = self._fetch(request.key)
-      if request.key in self._data_events:
-        self._data_events[request.key].set()
+    def _process_request(self, request: DataRequest):
+        """Process user request for the next element of interest.
 
-  def _fetch(self, key: Any) -> Dict[Any, Any]:
-    """Fetches data from an external source using user-defined IO function.
+        Runs user-provided long-IO fetch procedure if the data is not immediately available in cache or isn't already being fetched.
+        Updates the cache and notifies all watchers waiting for this element.
 
-    Returns:
-        Dict[Any, Any]: Mapping from a unique key to the element of interest.
-    """
-    if (window_start_frame := key - self._fetch_offset) > 0:
-      return self._fetch_fn(window_start_frame)
-    else:
-      return self._fetch_fn(0)
+        Args:
+            request (DataRequest): User-requested element of interest.
+        """
+        if request.key not in self._cache:
+            self._cache = self._fetch(request.key)
+            if request.key in self._data_events:
+                self._data_events[request.key].set()
+
+    def _fetch(self, key: Any) -> Dict[Any, Any]:
+        """Fetches data from an external source using user-defined IO function.
+
+        Returns:
+            Dict[Any, Any]: Mapping from a unique key to the element of interest.
+        """
+        if (window_start_frame := key - self._fetch_offset) > 0:
+            return self._fetch_fn(window_start_frame)
+        else:
+            return self._fetch_fn(0)

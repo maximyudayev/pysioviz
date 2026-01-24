@@ -25,23 +25,21 @@
 #
 # ############
 
-from abc import ABC, abstractmethod
-from dash import html
+from dash import Output, Input
+
+from pysioviz.components.data import VideoComponent
+from pysioviz.utils.gui_utils import app
+from pysioviz.utils.types import GlobalVariableId
 
 
-class BaseComponent(ABC):
-    def __init__(self, unique_id: str):
-        self._unique_id = unique_id
-        self.activate_callbacks()
-
-    @property
-    def layout(self) -> html.Div:
-        return self._layout
-
-    @abstractmethod
-    def activate_callbacks(self) -> None:
-        """Register callbacks to update figure content.
-
-        Callback definition must be wrapped inside an object method
-        to get access to the class instance object with reference to corresponding file."""
-        pass
+class ReferenceVideoComponent(VideoComponent):
+    def activate_callbacks(self):
+        @app.callback(
+            Output('%s-video' % (self._unique_id), 'figure'),
+            Output('%s-timestamp' % (self._unique_id), 'children'),
+            Input(GlobalVariableId.REF_FRAME_TIMESTAMP.value, 'data'),
+        )
+        def update_camera(ref_timestamp):
+            # Reference cameras override camera callback to match frame by closest `frame_timestamp` among each other, selected by frame slider.
+            self._current_frame_id = self.get_frame_for_timestamp(ref_timestamp)
+            return self._generate_patch_from_frame(self._current_frame_id)

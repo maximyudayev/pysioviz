@@ -10,13 +10,9 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "program": "main.py",
-            // "args": [
-            //     "-o", "examples/data",
-            //     "-f", "examples/dummy.yml",
-            //     "-e", "project=Test", "type=Dummy", "trial=0",
-            // ],
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Documents/Code/Projects/kdd2026/data/project_Revalexo/type_Transparent/trial_1"
             },
             "console": "integratedTerminal",
             "subProcess": true,
