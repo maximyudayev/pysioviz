@@ -34,12 +34,12 @@ import os
 from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 
-from pysioviz.components import BaseComponent
+from pysioviz.components.control import ControlComponent
 from pysioviz.utils.time_utils import get_time_str
 from pysioviz.utils.gui_utils import app
 
 
-class SaveLoadComponent(BaseComponent):
+class SaveLoadComponent(ControlComponent):
     """Load/save annotation component.
 
     - Save annotations and offsets to HDF5.
@@ -48,7 +48,6 @@ class SaveLoadComponent(BaseComponent):
 
     def __init__(self):
         """Save/Load functionality component."""
-        self._create_layout()
         super().__init__(unique_id='save_load')
 
     def _create_layout(self):
@@ -76,7 +75,7 @@ class SaveLoadComponent(BaseComponent):
                         )
                     ],
                     width=6,
-                    className='pe-1'
+                    className='pe-1',
                 ),
                 dbc.Col(
                     [
@@ -87,7 +86,7 @@ class SaveLoadComponent(BaseComponent):
                             color='success',
                             className='w-100',
                             size='sm',
-                        )
+                        ),
                     ],
                     width=6,
                     className='ps-1',
@@ -107,30 +106,10 @@ class SaveLoadComponent(BaseComponent):
                         'width': 350,
                         'zIndex': 9999,
                     },
-                )
+                ),
             ],
-            className='g-0',
+            className='g-0 mb-3',
         )
-            # [
-                # download_annotations,
-                # feedback_toast,
-            #     # Bottom buttons
-            #     html.Div(
-            #         [
-                        
-            #         ],
-            #         style={
-            #             'position': 'absolute',
-            #             'bottom': '0',
-            #             'left': '0',
-            #             'right': '0',
-            #             'height': '50px',
-            #             'padding': '10px',
-            #             'backgroundColor': 'white',
-            #             'borderTop': '1px solid #dee2e6',
-            #         },
-            #     ),
-            # ]
 
     def _save_to_hdf5(self, annotations, offsets):
         """Save annotations and offsets to HDF5 file."""

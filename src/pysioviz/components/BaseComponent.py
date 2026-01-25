@@ -26,17 +26,12 @@
 # ############
 
 from abc import ABC, abstractmethod
-from dash import html
 
 
 class BaseComponent(ABC):
     def __init__(self, unique_id: str):
         self._unique_id = unique_id
         self.activate_callbacks()
-
-    @property
-    def layout(self) -> html.Div:
-        return self._layout
 
     @abstractmethod
     def activate_callbacks(self) -> None:

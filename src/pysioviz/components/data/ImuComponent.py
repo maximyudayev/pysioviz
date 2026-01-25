@@ -103,8 +103,13 @@ class ImuComponent(DataComponent):
 
         self._graph = dcc.Graph(
             id=f'{unique_id}-imu-plot',
-            config={'displayModeBar': False},
+            config={'displayModeBar': True},
+            responsive=True,
             clear_on_unhover=True,
+            style={
+                'width': '100%',
+                'height': '40vh',
+            },
         )
 
         self._timestamp_display = html.Div(
@@ -206,7 +211,15 @@ class ImuComponent(DataComponent):
         self._end_idx = int(min(len(self._toa_s) - 1, end_idx))
         print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
 
-    def _create_figure(self, center_idx: int, joint_idx: int):
+    def make_click_input(self):
+        return Input(f'imu_{self._sensor_type}-imu-plot', 'clickData')
+
+    def handle_click(self, ref_frame_timestamp, sync_timestamp):
+        sample_id = self.get_frame_for_toa(sync_timestamp)
+        toa_s = self._toa_s[sample_id].item() if sample_id < len(self._toa_s) else 0
+        return f'IMU {self._sensor_type} - toa_s: {toa_s:.5f} (index: {sample_id})'
+
+    def _create_figure(self, center_idx: int, joint_idx: int) -> go.Figure:
         # Create the line plot figure for the given center index and joint
         # Ensure center_idx is within bounds
         center_idx = max(0, min(center_idx, len(self._data) - 1))
@@ -260,25 +273,6 @@ class ImuComponent(DataComponent):
                 col=1,
             )
 
-        # Update layout
-        title = f'{self._legend_name} - {self._joint_names[joint_idx]}'
-        if self._align_info.start_id != 0:
-            title += f' [offset: {self._align_info.start_id:+d}]'
-
-        fig.update_layout(
-            title_text=title,
-            showlegend=False,
-            margin=dict(l=50, r=20, t=60, b=20),
-            height=400,
-            width=400,
-        )
-
-        fig.update_xaxes(title_text='Time (s)', row=3, col=1)
-
-        # Update y-axes with consistent range
-        for i in range(3):
-            fig.update_yaxes(title_text=self._y_units, range=self._y_range, row=i + 1, col=1)
-
         return fig
 
     def activate_callbacks(self):
@@ -305,16 +299,29 @@ class ImuComponent(DataComponent):
                     # Get timestamp for display
                     timestamp = self._toa_s[current_idx] if current_idx < len(self._toa_s) else 0
                     timestamp_float = float(timestamp)
-                    timestamp_text = f'timestamp_s: {timestamp_float:.7f} (index: {current_idx})'
+                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {current_idx})'
 
-                    return fig, timestamp_text
                 else:
                     # Show initial data at start_idx if no sync
                     fig = self._create_figure(self._start_idx, joint_idx)
                     timestamp = self._toa_s[self._start_idx] if self._start_idx < len(self._toa_s) else 0
                     timestamp_float = float(timestamp)
-                    timestamp_text = f'timestamp_s: {timestamp_float:.7f} (index: {self._start_idx})'
-                    return fig, timestamp_text
+                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {self._start_idx})'
+
+                # Update layout
+                fig.update_layout(
+                    showlegend=False,
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    autosize=True,
+                )
+
+                fig.update_xaxes(title_text='Time (s)', row=3, col=1)
+
+                # Update y-axes with consistent range
+                for i in range(3):
+                    fig.update_yaxes(title_text=self._y_units, range=self._y_range, row=i + 1, col=1)
+
+                return fig, f'{timestamp_text} [offset: {self._offset_s*1000:+.0f}ms]'
 
             except Exception as e:
                 print(f'Error updating IMU plot: {e}', flush=True)

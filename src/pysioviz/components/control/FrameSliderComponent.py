@@ -29,13 +29,13 @@ from dash import html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import numpy as np
 
-from pysioviz.components import BaseComponent
+from pysioviz.components.control import ControlComponent
 from pysioviz.components.data import VideoComponent
 from pysioviz.utils.gui_utils import app
 from pysioviz.utils.types import GlobalVariableId, KeyType, TriggerId
 
 
-class FrameSliderComponent(BaseComponent):
+class FrameSliderComponent(ControlComponent):
     """Frame navigation and control component.
 
     - Main frame slider with markers.
@@ -57,13 +57,12 @@ class FrameSliderComponent(BaseComponent):
         self._combined_timestamps = combined_timestamps
         self._total_frames = len(combined_timestamps)
         self._fps = camera_components[0]._fps
-        self._create_layout()
         super().__init__(unique_id='frame_slider')
 
     @property
     def total_frames(self) -> int:
         return self._total_frames
-    
+
     @property
     def combined_timestamps(self) -> np.ndarray:
         return self._combined_timestamps
@@ -320,7 +319,7 @@ class FrameSliderComponent(BaseComponent):
     def activate_callbacks(self):
         @app.callback(
             Output('frame-controls-content', 'style'),
-            # Output('main-content', 'style', allow_duplicate=True),
+            Output('imu-row', 'style', allow_duplicate=True),
             Output('controls-visible', 'data'),
             Output('toggle-controls-btn', 'children'),
             Output('toggle-controls-btn', 'style'),
@@ -365,26 +364,22 @@ class FrameSliderComponent(BaseComponent):
                     'boxShadow': '0 -2px 10px rgba(0,0,0,0.1)',
                     'borderTop': '1px solid #dee2e6',
                 }
-                main_style = {
-                    'marginRight': '20%',
-                    'marginBottom': '180px',
-                    'padding': '10px',
+                imu_row_style = {
+                    'marginBottom': '250px',
                     'transition': 'margin-bottom 0.3s ease-in-out',
                 }
                 button_text = '▼'  # Down arrow when expanded
             else:
                 content_style = {'display': 'none'}
-                main_style = {
-                    'marginRight': '20%',
+                imu_row_style = {
                     'marginBottom': '10px',
-                    'padding': '10px',
                     'transition': 'margin-bottom 0.3s ease-in-out',
                 }
                 button_text = '▲'  # Up arrow when collapsed
 
             return (
                 content_style,
-                # main_style,
+                imu_row_style,
                 new_visibility,
                 button_text,
                 base_button_style,

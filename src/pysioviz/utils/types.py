@@ -93,17 +93,6 @@ class GlobalVariableId(Enum):
 
 
 @dataclass
-class Annotation:
-    id: int
-    label: str
-    task_start_start: str
-    task_start_end: str
-    task_end_start: str
-    task_end_end: str
-    edit_mode: bool
-
-
-@dataclass
 class GroundTruthLabel:
     label: str
     value: str
@@ -133,5 +122,6 @@ class AlignmentInfo:
 @dataclass
 class DataRequest:
     """Object wrapping user's element of interest into a fetch request."""
+
     key: str
     timestamp: float

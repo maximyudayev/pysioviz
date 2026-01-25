@@ -32,7 +32,6 @@ import base64
 import h5py
 
 from dash import Output, Input, dcc, html, Patch
-import dash_bootstrap_components as dbc
 import plotly.express as px
 
 from pysioviz.components.data import DataComponent
@@ -143,19 +142,15 @@ class VideoComponent(DataComponent):
             responsive=True,
             clear_on_unhover=True,
             style={
-                "width": "100%",
-                "height": div_height,
+                'width': '100%',
+                'height': div_height,
                 'cursor': 'pointer' if not is_highlight else 'default',
             },
         )
         self._timestamp_display = html.Div(
             id='%s-timestamp' % (unique_id),
             className='text-center small text-muted',
-            style={
-                'fontSize': '11px',
-                'height': '20px',
-                'lineHeight': '20px'
-            },
+            style={'fontSize': '11px', 'height': '20px', 'lineHeight': '20px'},
         )
 
         self._layout = html.Div(
@@ -170,7 +165,7 @@ class VideoComponent(DataComponent):
             ],
             style={
                 'width': '100%',
-            }
+            },
         )
 
     def read_data(self):
@@ -214,11 +209,6 @@ class VideoComponent(DataComponent):
         timestamp_diffs = np.abs(self._timestamp - timestamp)
         return np.argmin(timestamp_diffs).item()
 
-    def get_frame_for_toa(self, toa_s: float) -> int:
-        """Find the frame index closest to, but no later than the given time-of-arrival."""
-        toas_diffs = np.abs(self._toa_s - toa_s)
-        return np.argmin(toas_diffs).item()
-
     def get_timestamp_at_frame(self, frame_id: int) -> float:
         """Get the timestamp for a given frame."""
         return self._timestamp[frame_id].item()
@@ -240,9 +230,17 @@ class VideoComponent(DataComponent):
             sequence=self._sequence,
         )
 
+    def make_click_input(self):
+        return Input(f'{self._unique_id}-video', 'clickData')
+
+    def handle_click(self, ref_frame_timestamp, sync_timestamp):
+        frame_id = self.get_frame_for_toa(sync_timestamp)
+        toa = self.get_toa_at_frame(frame_id)
+        return f'{self._legend_name} - toa_s: {toa:.5f}'
+
     def _generate_patch_from_frame(self, frame_id: int):
         """Extracts specified frame of the video.
-        
+
         Args:
             frame_id (int): Exact frame of the video to extract.
         """
@@ -265,9 +263,10 @@ class VideoComponent(DataComponent):
             Output('%s-video' % (self._unique_id), 'figure'),
             Output('%s-timestamp' % (self._unique_id), 'children'),
             Input(GlobalVariableId.SYNC_TIMESTAMP.value, 'data'),
+            Input('offset-update-trigger', 'data'),
         )
-        def update_camera(sync_timestamp):
+        def update_camera(sync_timestamp, offset_trigger):
             # Regular cameras match frame as a slave by globally synced `sync_timestamp`.
             self._current_frame_id = self.get_frame_for_toa(sync_timestamp)
             fig, toa_text = self._generate_patch_from_frame(self._current_frame_id)
-            return fig, f'{toa_text} [offset: {self._align_info.start_id:+d}]'
+            return fig, f'{toa_text} [offset: {self._offset_s*1000:+.0f}ms]'

@@ -109,9 +109,15 @@ HWACCEL = HwAccelEnum.D3D12VA.value
 # This allows different components to access the same stores (global variables)
 shared_stores = [
     # Frame navigation stores
-    dcc.Store(id=GlobalVariableId.FRAME_ID.value, data=0),  # ID of the frame from the combined timestamps of the external reference cameras
-    dcc.Store(id=GlobalVariableId.REF_FRAME_TIMESTAMP.value, data=None),  # synced `frame_timestamp` of external reference cameras
-    dcc.Store(id=GlobalVariableId.SYNC_TIMESTAMP.value, data=None),  # Inter-modality synchronized `toa_s` timeline for reliable retrieval
+    dcc.Store(
+        id=GlobalVariableId.FRAME_ID.value, data=0
+    ),  # ID of the frame from the combined timestamps of the external reference cameras
+    dcc.Store(
+        id=GlobalVariableId.REF_FRAME_TIMESTAMP.value, data=None
+    ),  # synced `frame_timestamp` of external reference cameras
+    dcc.Store(
+        id=GlobalVariableId.SYNC_TIMESTAMP.value, data=None
+    ),  # Inter-modality synchronized `toa_s` timeline for reliable retrieval
     dcc.Store(id='fine-slider-window', data=250),
     dcc.Store(id='fine-slider-center', data=0),
     dcc.Store(id='controls-visible', data=True),
@@ -141,168 +147,141 @@ if __name__ == '__main__':
     # =======
     # CAMERAS
     # =======
-    if not cameras_hdf5_path.exists():
-        raise FileNotFoundError(f'Required file {cameras_hdf5_path} not found.')
-
     # Initialize camera components.
     camera_components: list[ReferenceVideoComponent] = []
     for config in CAMERA_CONFIGS:
         video_path = Path(f'{BASE_PATH}/{config.video_file}')
-        if video_path.exists():
-            camera = ReferenceVideoComponent(
-                video_filepath=str(video_path),
-                hdf5_filepath=str(cameras_hdf5_path),
-                unique_id=config.unique_id,
-                toa_hdf5_path=f'/cameras/{config.unique_id}/toa_s',
-                timestamp_hdf5_path=f'/cameras/{config.unique_id}/frame_timestamp',
-                sequence_hdf5_path=f'/cameras/{config.unique_id}/frame_index',
-                legend_name=f'Camera {config.unique_id}',
-                hwaccel=HWACCEL,
-                prefetch_window_s=2.0,
-            )
-            camera_components.append(camera)
-        else:
-            print(f'Warning: Camera video {config.video_file} not found, skipping...', flush=True)
+        camera = ReferenceVideoComponent(
+            video_filepath=str(video_path),
+            hdf5_filepath=str(cameras_hdf5_path),
+            unique_id=config.unique_id,
+            toa_hdf5_path=f'/cameras/{config.unique_id}/toa_s',
+            timestamp_hdf5_path=f'/cameras/{config.unique_id}/frame_timestamp',
+            sequence_hdf5_path=f'/cameras/{config.unique_id}/frame_index',
+            legend_name=f'Camera {config.unique_id}',
+            hwaccel=HWACCEL,
+            prefetch_window_s=2.0,
+        )
+        camera_components.append(camera)
 
     # ============
     # SMARTGLASSES
     # ============
-    eye_component: VideoComponent | None = None
-    if eye_video_path.exists():
-        try:
-            eye_component = VideoComponent(
-                video_filepath=str(eye_video_path),
-                hdf5_filepath=str(eye_hdf5_path),
-                unique_id='eye_world',
-                toa_hdf5_path=f'/glasses/ego/toa_s',
-                timestamp_hdf5_path=f'/glasses/ego/frame_timestamp',
-                sequence_hdf5_path=f'/glasses/ego/frame_index',
-                legend_name='Eye World Camera',
-                hwaccel=HWACCEL,
-                prefetch_window_s=10.0,
-                div_height='20vh',
-            )
-        except Exception as e:
-            print(f'Warning: Failed to load Eye Video: {e}', flush=True)
-    else:
-        print('Warning: Eye camera video or HDF5 not found, skipping eye camera...', flush=True)
+    eye_component = VideoComponent(
+        video_filepath=str(eye_video_path),
+        hdf5_filepath=str(eye_hdf5_path),
+        unique_id='eye_world',
+        toa_hdf5_path=f'/glasses/ego/toa_s',
+        timestamp_hdf5_path=f'/glasses/ego/frame_timestamp',
+        sequence_hdf5_path=f'/glasses/ego/frame_index',
+        legend_name='Eye World Camera',
+        hwaccel=HWACCEL,
+        prefetch_window_s=10.0,
+        div_height='20vh',
+    )
 
     # ======
     # MOTORS
     # ======
-    # motors_component = None
-    # if exo_hdf5_path.exists():
-    #   try:
-    #     motors_component = LinePlotComponent(
-    #       hdf5_path=str(exo_hdf5_path),
-    #       data_path=[
-    #         '/revalexo/motor_hip_right/position',
-    #         '/revalexo/motor_knee_right/position',
-    #         '/revalexo/motor_hip_left/position',
-    #         '/revalexo/motor_knee_left/position',
-    #       ],
-    #       timestamp_path=[
-    #         '/revalexo/motor_hip_right/timestamp',
-    #         '/revalexo/motor_knee_right/timestamp',
-    #         '/revalexo/motor_hip_left/timestamp',
-    #         '/revalexo/motor_knee_left/timestamp',
-    #       ],
-    #       unique_id='motor_angles',
-    #       legend_name='Motor Angles',
-    #       channel_names=['Hip Right', 'Knee Right', 'Hip Left', 'Knee Left'],
-    #       plot_window_seconds=10,
-    #       sampling_rate=50.0,
-    #       y_units="degrees"
-    #     )
-    #   except Exception as e:
-    #     print(f"Warning: Failed to load insole data: {e}")
-    #     motors_component = None
-    # else:
-    #   print("Warning: Motors HDF5 not found, skipping insole data...", flush=True)
+    # motors_component = LinePlotComponent(
+    #     hdf5_path=str(exo_hdf5_path),
+    #     data_path=[
+    #     '/revalexo/motor_hip_right/position',
+    #     '/revalexo/motor_knee_right/position',
+    #     '/revalexo/motor_hip_left/position',
+    #     '/revalexo/motor_knee_left/position',
+    #     ],
+    #     timestamp_path=[
+    #     '/revalexo/motor_hip_right/timestamp',
+    #     '/revalexo/motor_knee_right/timestamp',
+    #     '/revalexo/motor_hip_left/timestamp',
+    #     '/revalexo/motor_knee_left/timestamp',
+    #     ],
+    #     unique_id='motor_angles',
+    #     legend_name='Motor Angles',
+    #     channel_names=['Hip Right', 'Knee Right', 'Hip Left', 'Knee Left'],
+    #     plot_window_seconds=10,
+    #     sampling_rate=50.0,
+    #     y_units="degrees"
+    # )
 
     # ========
     # SKELETON
     # ========
-    skeleton_component: SkeletonComponent | None = None
-    if mvn_hdf5_path.exists():
-        try:
-            skeleton_component = SkeletonComponent(
-                hdf5_path=str(mvn_hdf5_path),
-                position_path='/mvn-analyze/xsens-pose/position',
-                pos_counter_path='/mvn-analyze/xsens-pose/counter',
-                timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
-                ref_counter_path='/mvn-analyze/xsens-time/counter',
-                unique_id='skeleton_mvn',
-                legend_name='Skeleton',
-            )
-        except Exception as e:
-            print(f'Warning: Failed to load skeleton data: {e}', flush=True)
-            skeleton_component = None
+    skeleton_component = SkeletonComponent(
+        hdf5_path=str(mvn_hdf5_path),
+        position_path='/mvn-analyze/xsens-pose/position',
+        pos_counter_path='/mvn-analyze/xsens-pose/counter',
+        timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
+        ref_counter_path='/mvn-analyze/xsens-time/counter',
+        unique_id='skeleton_mvn',
+        legend_name='Skeleton',
+    )
 
     # ============
     # Wearable IMU
     # ============
-    imu_acc_component: ImuComponent | None = None
-    imu_gyr_component: ImuComponent | None = None
-    imu_mag_component: ImuComponent | None = None
-    if mvn_hdf5_path.exists():
-        try:
-            imu_acc_component = ImuComponent(
-                hdf5_path=str(mvn_hdf5_path),
-                data_path='/mvn-analyze/xsens-motion-trackers/acceleration',
-                data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
-                timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
-                ref_counter_path='/mvn-analyze/xsens-time/counter',
-                unique_id='imu_accelerometer',
-                legend_name='Accelerometer',
-                sensor_type='accelerometer',
-                plot_window_seconds=10,
-                sampling_rate=60.0,
-            )
+    imu_acc_component = ImuComponent(
+        hdf5_path=str(mvn_hdf5_path),
+        data_path='/mvn-analyze/xsens-motion-trackers/acceleration',
+        data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
+        timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
+        ref_counter_path='/mvn-analyze/xsens-time/counter',
+        unique_id='imu_accelerometer',
+        legend_name='Accelerometer',
+        sensor_type='accelerometer',
+        plot_window_seconds=10,
+        sampling_rate=60.0,
+    )
 
-            imu_gyr_component = ImuComponent(
-                hdf5_path=str(mvn_hdf5_path),
-                data_path='/mvn-analyze/xsens-motion-trackers/gyroscope',
-                data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
-                timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
-                ref_counter_path='/mvn-analyze/xsens-time/counter',
-                unique_id='imu_gyroscope',
-                legend_name='Gyroscope',
-                sensor_type='gyroscope',
-                plot_window_seconds=10,
-                sampling_rate=60.0,
-            )
+    imu_gyr_component = ImuComponent(
+        hdf5_path=str(mvn_hdf5_path),
+        data_path='/mvn-analyze/xsens-motion-trackers/gyroscope',
+        data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
+        timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
+        ref_counter_path='/mvn-analyze/xsens-time/counter',
+        unique_id='imu_gyroscope',
+        legend_name='Gyroscope',
+        sensor_type='gyroscope',
+        plot_window_seconds=10,
+        sampling_rate=60.0,
+    )
 
-            imu_mag_component = ImuComponent(
-                hdf5_path=str(mvn_hdf5_path),
-                data_path='/mvn-analyze/xsens-motion-trackers/magnetometer',
-                data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
-                timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
-                ref_counter_path='/mvn-analyze/xsens-time/counter',
-                unique_id='imu_magnetometer',
-                legend_name='Magnetometer',
-                sensor_type='magnetometer',
-                plot_window_seconds=10,
-                sampling_rate=60.0,
-            )
-
-        except Exception as e:
-            print(f'Warning: Failed to load IMU data: {e}', flush=True)
-            imu_acc_component = None
-            imu_gyr_component = None
-            imu_mag_component = None
-    else:
-        print('Warning: MVN Analyze HDF5 not found, skipping skeleton and IMU data...', flush=True)
+    imu_mag_component = ImuComponent(
+        hdf5_path=str(mvn_hdf5_path),
+        data_path='/mvn-analyze/xsens-motion-trackers/magnetometer',
+        data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
+        timestamp_path='/mvn-analyze/xsens-time/timestamp_s',
+        ref_counter_path='/mvn-analyze/xsens-time/counter',
+        unique_id='imu_magnetometer',
+        legend_name='Magnetometer',
+        sensor_type='magnetometer',
+        plot_window_seconds=10,
+        sampling_rate=60.0,
+    )
 
     # =============================================
     # Extract reference time ticks for frame slider
     # =============================================
-    combined_timestamps, camera_align_info, start_trial_toa, end_trial_toa = extract_refticks_from_cameras(camera_components)
-    add_alignment_info(camera_components, camera_align_info)    
+    combined_timestamps, combined_toas, camera_align_info, start_trial_toa, end_trial_toa = (
+        extract_refticks_from_cameras(camera_components)
+    )
+    add_alignment_info(camera_components, camera_align_info)
 
-    skeleton_components = [skeleton_component] if skeleton_component else []
-    imu_components = [c for c in [imu_acc_component, imu_gyr_component, imu_mag_component] if c is not None]
-    data_components = [camera_components, eye_component, skeleton_components, imu_components]
+    offset_components: list[DataComponent] = [
+        eye_component,
+        skeleton_component,
+        imu_acc_component,
+        imu_gyr_component,
+        imu_mag_component,
+        # TODO: motors
+        # TODO: integrated IMUs
+    ]
+
+    data_components: list[DataComponent] = [
+        *camera_components,
+        *offset_components,
+    ]
 
     print(f'\nUsing Cameras as reference for visualization duration', flush=True)
     print(f'Total {len(combined_timestamps)} video frames in trial, for {end_trial_toa - start_trial_toa}s', flush=True)
@@ -315,24 +294,66 @@ if __name__ == '__main__':
     # These components handle frame navigation, annotations, offsets, and saving/loading
     # Initialize control components
     frame_slider = FrameSliderComponent(camera_components, combined_timestamps)
-    annotations = AnnotationComponent(ANNOTATION_OPTIONS, combined_timestamps)
-
-    # Get all non-camera components that can have offsets
-    offset_components = []
-    if eye_component:
-        offset_components.append(eye_component)
-    offset_components.extend(skeleton_components)
-    offset_components.extend(imu_components)
-
-    # TODO: use combined timestamps for frame tracking and annotation.
-    # TODO: use offsets for proper index calculation for slave modalities.
-    # TODO: compute timestamp w.r.t. to experiment's starting time-of-arrival.
-    offsets = OffsetComponent(offset_components, data_components)
+    annotations = AnnotationComponent(ANNOTATION_OPTIONS, combined_timestamps, combined_toas)
+    offsets = OffsetComponent(offset_components)
     save_load = SaveLoadComponent()
 
-    # ===============
-    # LAYOUT ASSEMBLY
-    # ===============
+    # ================
+    # COMPONENT LAYOUT
+    # ================
+    # Cameras 2x2 mini grid
+    camera_grid = dbc.Col(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [camera_components[0].layout],
+                        width=6,
+                    ),
+                    dbc.Col(
+                        [camera_components[1].layout],
+                        width=6,
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [camera_components[2].layout],
+                        width=6,
+                    ),
+                    dbc.Col(
+                        [camera_components[3].layout],
+                        width=6,
+                    ),
+                ]
+            ),
+        ],
+        width=9,
+    )
+
+    # Skeleton from Xsens
+    skeleton = dbc.Col(
+        [
+            skeleton_component.layout,
+        ],
+        width=3,
+        align='center',
+    )
+
+    # Egocentric view
+    ego_view = dbc.Col([eye_component.layout], width=3)
+
+    # Wearable IMUs
+    imu_row = [
+        dbc.Col([imu_acc_component.layout], width=4),
+        dbc.Col([imu_gyr_component.layout], width=4),
+        dbc.Col([imu_mag_component.layout], width=4),
+    ]
+
+    # Frame slider
+    slider = dbc.Col([frame_slider.layout], width=9)
+
     # Right panel with tabs
     right_panel = dbc.Card(
         [
@@ -344,23 +365,22 @@ if __name__ == '__main__':
                             dbc.Tabs(
                                 [
                                     annotations.layout,
-                                    dbc.Tab(
-                                        offsets.layout,
-                                        label='🎚️ Offsets',
-                                        tab_id='offsets-tab',
-                                    ),
+                                    offsets.layout,
                                 ],
                                 id='right-panel-tabs',
                                 active_tab='annotations-tab',
                             )
-                        ]
+                        ],
+                        className='g-0',
                     ),
                 ],
             )
         ],
     )
 
-    # Assemble complete layout
+    # ===================
+    # APP LAYOUT ASSEMBLY
+    # ===================
     app.layout = dbc.Container(
         [
             dbc.Row(
@@ -369,81 +389,28 @@ if __name__ == '__main__':
                         [
                             dbc.Row(  # Skeleton and reference cameras
                                 [
-                                    dbc.Col(  # Skeleton
-                                        [
-                                            skeleton_component.layout,
-                                        ],
-                                        width=3,
-                                        align="center",
-                                    ),
-                                    dbc.Col(  # Cameras 2x2 mini grid
-                                        [
-                                            dbc.Row(
-                                                [
-                                                    dbc.Col(
-                                                        [camera_components[0].layout],
-                                                        width=6,
-                                                    ),
-                                                    dbc.Col(
-                                                        [camera_components[1].layout],
-                                                        width=6,
-                                                    ),
-                                                ]
-                                            ),
-                                            dbc.Row(
-                                                [
-                                                    dbc.Col(
-                                                        [camera_components[2].layout],
-                                                        width=6,
-                                                    ),
-                                                    dbc.Col(
-                                                        [camera_components[3].layout],
-                                                        width=6,
-                                                    ),
-                                                ]
-                                            ),
-                                        ],
-                                        width=9,
-                                    ),
+                                    skeleton,
+                                    camera_grid,
                                 ]
                             ),
                             dbc.Row(  # Motors and ego view
                                 [
-                                    dbc.Col(  # Egocentric view
-                                        [eye_component.layout],
-                                        width=3
-                                    ),
+                                    ego_view,
                                     # TODO: motors
                                 ]
                             ),
                             dbc.Row(  # Wearable IMUs
-                                [
-                                    dbc.Col(
-                                        [imu_acc_component.layout],
-                                        width=3
-                                    ),
-                                    dbc.Col(
-                                        [imu_gyr_component.layout],
-                                        width=3
-                                    ),
-                                    dbc.Col(
-                                        [imu_mag_component.layout],
-                                        width=3
-                                    ),
-                                ],
+                                imu_row,
                                 id='imu-row',
-                                # className='mb-3',
+                                style={
+                                    'margin-bottom': '250px',
+                                },
                             ),
                             dbc.Row(
-                                [
-                                    dbc.Col(
-                                        [frame_slider.layout],
-                                        width=9
-                                    ),
-                                ],
+                                [slider],
                             ),
                         ],
-                        width=9
+                        width=9,
                     ),
                     dbc.Col(  # Annotation / offsets right sidebar
                         [right_panel],
@@ -453,17 +420,14 @@ if __name__ == '__main__':
                             'right': '0',
                             'top': '0',
                             'zIndex': '2000',
-                            'backgroundColor': 'white',
-                            'border': '1px solid #dee2e6',
-                            'borderRadius': '4px',
                         },
-                    )
+                    ),
                 ]
             ),
             # Hidden stores
             *shared_stores,
         ],
-        fluid=True
+        fluid=True,
     )
 
     # =========================
@@ -472,19 +436,8 @@ if __name__ == '__main__':
     # Click handler for all visualization components
     # This allows clicking on any data visualization (video, plot, skeleton)
     # to display its timestamp in the annotation panel (can be used to copy for more precise annotations)
-    click_inputs: list[Input] = []
-    for cam in camera_components:
-        click_inputs.append(Input(f'{cam._unique_id}-video', 'clickData'))
-    if eye_component:
-        click_inputs.append(Input('eye_world-video', 'clickData'))
-    if skeleton_component:
-        click_inputs.append(Input('skeleton_mvn-skeleton', 'clickData'))
-    if imu_acc_component:
-        click_inputs.append(Input('imu_accelerometer-imu-plot', 'clickData'))
-    if imu_gyr_component:
-        click_inputs.append(Input('imu_gyroscope-imu-plot', 'clickData'))
-    if imu_mag_component:
-        click_inputs.append(Input('imu_magnetometer-imu-plot', 'clickData'))
+    click_inputs: list[Input] = [comp.make_click_input() for comp in data_components]
+    clicked_components = dict(zip(map(lambda x: x.component_id_str(), click_inputs), data_components))
 
     @app.callback(
         Output(GlobalVariableId.SELECTED_TIMESTAMP.value, 'value'),
@@ -506,53 +459,9 @@ if __name__ == '__main__':
         ref_frame_timestamp = args[-2]
         sync_timestamp = args[-1]
 
-        # Handle camera clicks
-        for cam in camera_components:
-            if trigger_id == f'{cam._unique_id}-video':
-                frame_id = cam.get_frame_for_timestamp(ref_frame_timestamp)
-                toa = cam.get_toa_at_frame(frame_id)
-                return f'Camera {cam._unique_id} - toa_s: {toa:.7f}'
-
-        # Handle eye video click
-        if eye_component and trigger_id == 'eye_world-video':
-            if sync_timestamp:
-                frame_id = eye_component.get_frame_for_timestamp(sync_timestamp)
-                toa = eye_component.get_toa_at_frame(frame_id)
-                return f'Eye video - frame_timestamp: {toa:.7f}'
-
-        # Handle skeleton click
-        if skeleton_component and trigger_id == 'skeleton_mvn-skeleton':
-            if sync_timestamp:
-                sample_id = skeleton_component.get_frame_for_toa(sync_timestamp)
-                timestamp = (
-                    skeleton_component._toa_s[sample_id].item() if sample_id < len(skeleton_component._toa_s) else 0
-                )
-                return f'Skeleton MVN - timestamp_s: {timestamp:.7f} (index: {sample_id})'
-
-        # Handle IMU clicks
-        if trigger_id in [
-            'imu_accelerometer-imu-plot',
-            'imu_gyroscope-imu-plot',
-            'imu_magnetometer-imu-plot',
-        ]:
-            imu_type = trigger_id.split('-')[0].split('_')[1]  # Extract accelerometer/gyroscope/magnetometer
-
-            # Get the appropriate component
-            if imu_type == 'accelerometer' and imu_acc_component:
-                imu_component = imu_acc_component
-            elif imu_type == 'gyroscope' and imu_gyr_component:
-                imu_component = imu_gyr_component
-            elif imu_type == 'magnetometer' and imu_mag_component:
-                imu_component = imu_mag_component
-            else:
-                return ''
-
-            if sync_timestamp:
-                sample_id = imu_component.get_frame_for_toa(sync_timestamp)
-                timestamp = imu_component._toa_s[sample_id].item() if sample_id < len(imu_component._toa_s) else 0
-                return f'IMU {imu_type} - timestamp_s: {timestamp:.7f} (index: {sample_id})'
-
-        return ''
+        # Handle click
+        comp = clicked_components[trigger_id]
+        return comp.handle_click(ref_frame_timestamp, sync_timestamp)
 
     # Fix for the annotation display update callback
     # This is necessary to ensure the annotation UI refreshes when annotations are loaded from file

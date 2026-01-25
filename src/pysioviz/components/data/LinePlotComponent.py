@@ -29,7 +29,6 @@ import numpy as np
 import h5py
 
 from dash import Output, Input, dcc, html
-import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -103,7 +102,7 @@ class LinePlotComponent(DataComponent):
 
         self._layout = html.Div(
             [
-                html.H6(self._legend_name, className="text-center mb-2"),
+                html.H6(self._legend_name, className='text-center mb-2'),
                 self._graph,
                 self._timestamp_display,
             ],
@@ -484,7 +483,7 @@ class LinePlotComponent(DataComponent):
                         self._sample_timestamps[initial_idx] if initial_idx < len(self._sample_timestamps) else 0
                     )
                     timestamp_float = float(timestamp)
-                    timestamp_text = f'toa_s: {timestamp_float:.7f} (index: {initial_idx})'
+                    timestamp_text = f'toa_s: {timestamp_float:.7f} (index: {initial_idx}) {self._offset_s*1000:.0f}'
                     return fig, timestamp_text
 
             except Exception as e:

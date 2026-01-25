@@ -27,6 +27,7 @@
 
 from abc import abstractmethod
 import numpy as np
+from dash import Input, html
 
 from pysioviz.components import BaseComponent
 from pysioviz.utils.types import AlignmentInfo
@@ -37,7 +38,16 @@ class DataComponent(BaseComponent):
         self._toa_s: np.ndarray | None = None
         self.read_data()
         self._align_info = AlignmentInfo(0, len(self._toa_s))
+        self._offset_s = 0.0
         super().__init__(unique_id=unique_id)
+
+    @property
+    def layout(self) -> html.Div:
+        return self._layout
+
+    @property
+    def legend_name(self) -> html.Div:
+        return self._legend_name
 
     @abstractmethod
     def read_data(self) -> None:
@@ -49,18 +59,24 @@ class DataComponent(BaseComponent):
         """Return synchronization info for this component."""
         pass
 
+    @abstractmethod
+    def make_click_input(self) -> Input:
+        pass
+
+    @abstractmethod
+    def handle_click(self, ref_frame_timestamp, sync_timestamp) -> str:
+        pass
+
     def get_frame_for_toa(self, sync_timestamp: float) -> int:
-        """Find the index closest to a given timestamp with offset.
-        
-        TODO: adapt to retrieve only past samples?
-        """
-        time_diffs = np.abs(self._toa_s - sync_timestamp)
-        closest_id = np.argmin(time_diffs).item()
-        # Apply offset
-        offset_id = closest_id + self._align_info.start_id
-        # Ensure within bounds
-        offset_id = max(0, min(len(self._toa_s) - 1, offset_id))
-        return offset_id
+        """Find the index closest to a given timestamp with offset."""
+        time_diffs = (self._toa_s - (sync_timestamp + self._offset_s)) <= 0
+        return max(np.sum(time_diffs).item() - 1, 0)
+    
+    def set_offset(self, offset_ms: float) -> None:
+        self._offset_s = offset_ms/1000
+
+    def get_offset(self) -> float:
+        return self._offset_s
 
     def set_align_info(self, alignment_info: AlignmentInfo) -> None:
         """Set alignment info for the component."""

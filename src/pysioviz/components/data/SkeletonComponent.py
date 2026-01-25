@@ -118,19 +118,15 @@ class SkeletonComponent(DataComponent):
             responsive=True,
             clear_on_unhover=True,
             style={
-                "width": "100%",
-                "height": "60vh",
+                'width': '100%',
+                'height': '60vh',
             },
         )
 
         self._timestamp_display = html.Div(
             id=f'{unique_id}-timestamp',
             className='text-center small text-muted',
-            style={
-                'fontSize': '11px',
-                'height': '20px',
-                'lineHeight': '20px'
-            },
+            style={'fontSize': '11px', 'height': '20px', 'lineHeight': '20px'},
         )
 
         self._layout = html.Div(
@@ -141,7 +137,7 @@ class SkeletonComponent(DataComponent):
             ],
             style={
                 'width': '100%',
-            }
+            },
         )
 
         super().__init__(unique_id=unique_id)
@@ -201,6 +197,14 @@ class SkeletonComponent(DataComponent):
         self._end_idx = int(min(len(self._toa_s) - 1, end_idx))
         print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
 
+    def make_click_input(self):
+        return Input('skeleton_mvn-skeleton', 'clickData')
+
+    def handle_click(self, ref_frame_timestamp, sync_timestamp):
+        sample_id = self.get_frame_for_toa(sync_timestamp)
+        toa_s = self._toa_s[sample_id].item() if sample_id < len(self._toa_s) else 0
+        return f'Skeleton MVN - toa_s: {toa_s:.5f} (index: {sample_id})'
+
     def _create_figure(self, frame_idx: int) -> go.Figure:
         # Ensure frame_idx is within bounds
         frame_idx = max(0, min(frame_idx, len(self._positions) - 1))
@@ -252,7 +256,6 @@ class SkeletonComponent(DataComponent):
             Input('offset-update-trigger', 'data'),
         )
         def update_skeleton(sync_timestamp, offset_trigger):
-            # TODO: use offset.
             try:
                 if sync_timestamp is not None:
                     # Find the index matching the sync timestamp
@@ -264,14 +267,16 @@ class SkeletonComponent(DataComponent):
                     # Get timestamp for display
                     timestamp = self._toa_s[current_idx] if current_idx < len(self._toa_s) else 0
                     timestamp_float = float(timestamp)
-                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {current_idx}) [offset: {self._align_info.start_id:+d}]'
+                    timestamp_text = (
+                        f'toa_s: {timestamp_float:.5f} (index: {current_idx}) [offset: {self._offset_s*1000:+.0f}ms]'
+                    )
 
                 else:
                     # Show initial data at start_idx if no sync
                     fig = self._create_figure(self._start_idx)
                     timestamp = self._toa_s[self._start_idx] if self._start_idx < len(self._toa_s) else 0
                     timestamp_float = float(timestamp)
-                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {self._start_idx}) [offset: {self._align_info.start_id:+d}]'
+                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {self._start_idx}) [offset: {self._offset_s*1000:+.0f}ms]'
 
                 # Update layout
                 fig.update_layout(

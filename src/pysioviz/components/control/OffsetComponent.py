@@ -30,12 +30,12 @@ import json
 from dash import html, Input, Output, State, callback_context, ALL
 import dash_bootstrap_components as dbc
 
-from pysioviz.components import BaseComponent
+from pysioviz.components.control import ControlComponent
 from pysioviz.components.data import DataComponent
 from pysioviz.utils.gui_utils import app
 
 
-class OffsetComponent(BaseComponent):
+class OffsetComponent(ControlComponent):
     """Offset alignment control component.
 
     - Individual offset controls for each component.
@@ -45,7 +45,7 @@ class OffsetComponent(BaseComponent):
     - Apply offsets to components.
     """
 
-    def __init__(self, offset_components: list[DataComponent], all_components: list):
+    def __init__(self, offset_components: list[DataComponent]):
         """
         Synchronization offset control component.
 
@@ -54,325 +54,201 @@ class OffsetComponent(BaseComponent):
             all_components: All components (for applying offsets)
         """
         self._offset_components = offset_components
-        self._all_components = all_components
-        self._create_layout()
         super().__init__(unique_id='offset_panel')
 
     def _create_layout(self):
         """Create offset control UI."""
-        self._layout = html.Div(
-            [
-                html.H5('Synchronization Offsets', className='text-center mb-2 mt-2'),
-                html.P(
-                    'Adjust offsets to synchronize components:',
-                    className='text-muted text-center small mb-3',
-                ),
-                # Scrollable offset controls area
-                html.Div(
-                    id='offsets-container',
-                    style={
-                        'maxHeight': 'calc(100vh - 320px)',
-                        'overflowY': 'auto',
-                        'paddingRight': '5px',
-                    },
-                ),
-                # Reset All button
-                html.Div(
+        self._layout = dbc.Tab(
+            label='🎚️ Offsets',
+            tab_id='offsets-tab',
+            children=[
+                dbc.Row(
                     [
-                        dbc.Button(
-                            'Reset All Offsets',
-                            id='reset-all-offsets-btn',
-                            color='danger',
-                            className='w-100 mt-3',
-                            size='sm',
+                        dbc.Col(
+                            [
+                                html.H5('Synchronization Offsets', className='text-center mb-2 mt-2'),
+                                html.P(
+                                    'Adjust offsets to synchronize components:',
+                                    className='text-muted text-center small mb-3',
+                                ),
+                            ]
                         )
                     ]
                 ),
-            ]
+                dbc.Row(  # Scrollable offset controls area
+                    [
+                        dbc.Col(
+                            [
+                                html.Div(
+                                    id='offsets-container',
+                                    style={
+                                        'maxHeight': '50vh',
+                                        'overflowY': 'auto',
+                                        'paddingRight': '5px',
+                                    },
+                                ),
+                            ]
+                        )
+                    ]
+                ),
+                dbc.Row(  # Reset All button
+                    [
+                        dbc.Col(
+                            [
+                                html.Div(
+                                    [
+                                        dbc.Button(
+                                            'Reset All Offsets',
+                                            id='reset-all-offsets-btn',
+                                            color='danger',
+                                            className='w-100 mt-3',
+                                            size='sm',
+                                        )
+                                    ]
+                                ),
+                            ]
+                        )
+                    ]
+                ),
+            ],
         )
 
-    def _create_offset_controls(self, components, current_offsets):
+    def _create_offset_controls(self, components: list[DataComponent], current_offsets: dict[str, int]):
         """Create offset controls for each component"""
         offset_controls = []
 
-        # Group components by type
-        component_groups = {
-            'Eye Camera': [],
-            'EMG': [],
-            'Skeleton/IMU': [],  # Shared offset
-            'Insole': [],
-        }
-
-        # Sort components into groups
-        # TODO: cleanup.
         for comp in components:
-            if hasattr(comp, '_is_eye_camera') and comp._is_eye_camera:
-                component_groups['Eye Camera'].append(comp)
-            elif comp._unique_id.startswith('emg_'):
-                component_groups['EMG'].append(comp)
-            elif comp._unique_id.startswith('skeleton_') or comp._unique_id.startswith('imu_'):
-                component_groups['Skeleton/IMU'].append(comp)
-            elif comp._unique_id.startswith('insole_'):
-                component_groups['Insole'].append(comp)
+            if comp:
+                offset_key = comp._unique_id
+                current_offset = current_offsets.get(offset_key, 0)
 
-        # Create controls for each group
-        for group_name, group_components in component_groups.items():
-            if group_components:
-                # For Skeleton/IMU, use shared offset
-                if group_name == 'Skeleton/IMU':
-                    offset_key = 'skeleton_imu_shared'
-                    current_offset = current_offsets.get(offset_key, 0)
-
-                    control = dbc.Card(
-                        [
-                            dbc.CardBody(
-                                [
-                                    html.H6(f'{group_name} (Shared)', className='mb-2'),
-                                    dbc.Row(
-                                        [
-                                            dbc.Col(
-                                                [
-                                                    dbc.Button(
-                                                        '-10',
-                                                        id={
-                                                            'type': 'offset-dec-10',
-                                                            'index': offset_key,
-                                                        },
-                                                        color='secondary',
-                                                        size='sm',
-                                                        style={'width': '45px'},
-                                                    )
-                                                ],
-                                                width='auto',
-                                            ),
-                                            dbc.Col(
-                                                [
-                                                    dbc.Button(
-                                                        '-',
-                                                        id={
-                                                            'type': 'offset-dec',
-                                                            'index': offset_key,
-                                                        },
-                                                        color='primary',
-                                                        size='sm',
-                                                        style={'width': '35px'},
-                                                    )
-                                                ],
-                                                width='auto',
-                                            ),
-                                            dbc.Col(
-                                                [
-                                                    dbc.Input(
-                                                        id={
-                                                            'type': 'offset-value',
-                                                            'index': offset_key,
-                                                        },
-                                                        value=str(current_offset),
-                                                        type='text',
-                                                        readonly=True,
-                                                        className='text-center',
-                                                        style={'fontWeight': 'bold'},
-                                                    )
-                                                ],
-                                                width=True,
-                                            ),
-                                            dbc.Col(
-                                                [
-                                                    dbc.Button(
-                                                        '+',
-                                                        id={
-                                                            'type': 'offset-inc',
-                                                            'index': offset_key,
-                                                        },
-                                                        color='primary',
-                                                        size='sm',
-                                                        style={'width': '35px'},
-                                                    )
-                                                ],
-                                                width='auto',
-                                            ),
-                                            dbc.Col(
-                                                [
-                                                    dbc.Button(
-                                                        '+10',
-                                                        id={
-                                                            'type': 'offset-inc-10',
-                                                            'index': offset_key,
-                                                        },
-                                                        color='secondary',
-                                                        size='sm',
-                                                        style={'width': '45px'},
-                                                    )
-                                                ],
-                                                width='auto',
-                                            ),
-                                            dbc.Col(
-                                                [
-                                                    dbc.Button(
-                                                        'Reset',
-                                                        id={
-                                                            'type': 'offset-reset',
-                                                            'index': offset_key,
-                                                        },
-                                                        color='warning',
-                                                        size='sm',
-                                                        style={'width': '60px'},
-                                                    )
-                                                ],
-                                                width='auto',
-                                            ),
-                                        ],
-                                        align='center',
-                                        className='g-1',
-                                    ),
-                                ],
-                                className='p-2',
-                            )
-                        ],
-                        className='mb-2',
-                    )
-
-                    offset_controls.append(control)
-                else:
-                    # For other components, individual offsets
-                    for comp in group_components:
-                        offset_key = comp._unique_id
-                        current_offset = current_offsets.get(offset_key, 0)
-
-                        control = dbc.Card(
+                control = dbc.Card(
+                    [
+                        dbc.CardBody(
                             [
-                                dbc.CardBody(
+                                html.H6(comp.legend_name, className='mb-2'),
+                                dbc.Row(
                                     [
-                                        html.H6(comp._legend_name, className='mb-2'),
-                                        dbc.Row(
+                                        dbc.Col(
                                             [
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Button(
-                                                            '-10',
-                                                            id={
-                                                                'type': 'offset-dec-10',
-                                                                'index': offset_key,
-                                                            },
-                                                            color='secondary',
-                                                            size='sm',
-                                                            style={'width': '45px'},
-                                                        )
-                                                    ],
-                                                    width='auto',
-                                                ),
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Button(
-                                                            '-',
-                                                            id={
-                                                                'type': 'offset-dec',
-                                                                'index': offset_key,
-                                                            },
-                                                            color='primary',
-                                                            size='sm',
-                                                            style={'width': '35px'},
-                                                        )
-                                                    ],
-                                                    width='auto',
-                                                ),
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Input(
-                                                            id={
-                                                                'type': 'offset-value',
-                                                                'index': offset_key,
-                                                            },
-                                                            value=str(current_offset),
-                                                            type='text',
-                                                            readonly=True,
-                                                            className='text-center',
-                                                            style={'fontWeight': 'bold'},
-                                                        )
-                                                    ],
-                                                    width=True,
-                                                ),
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Button(
-                                                            '+',
-                                                            id={
-                                                                'type': 'offset-inc',
-                                                                'index': offset_key,
-                                                            },
-                                                            color='primary',
-                                                            size='sm',
-                                                            style={'width': '35px'},
-                                                        )
-                                                    ],
-                                                    width='auto',
-                                                ),
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Button(
-                                                            '+10',
-                                                            id={
-                                                                'type': 'offset-inc-10',
-                                                                'index': offset_key,
-                                                            },
-                                                            color='secondary',
-                                                            size='sm',
-                                                            style={'width': '45px'},
-                                                        )
-                                                    ],
-                                                    width='auto',
-                                                ),
-                                                dbc.Col(
-                                                    [
-                                                        dbc.Button(
-                                                            'Reset',
-                                                            id={
-                                                                'type': 'offset-reset',
-                                                                'index': offset_key,
-                                                            },
-                                                            color='warning',
-                                                            size='sm',
-                                                            style={'width': '60px'},
-                                                        )
-                                                    ],
-                                                    width='auto',
-                                                ),
+                                                dbc.Button(
+                                                    '-10',
+                                                    id={
+                                                        'type': 'offset-dec-10',
+                                                        'index': offset_key,
+                                                    },
+                                                    color='secondary',
+                                                    size='sm',
+                                                    style={'width': '45px'},
+                                                )
                                             ],
-                                            align='center',
-                                            className='g-1',
+                                            width='auto',
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                dbc.Button(
+                                                    '-',
+                                                    id={
+                                                        'type': 'offset-dec',
+                                                        'index': offset_key,
+                                                    },
+                                                    color='primary',
+                                                    size='sm',
+                                                    style={'width': '35px'},
+                                                )
+                                            ],
+                                            width='auto',
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                dbc.Input(
+                                                    id={
+                                                        'type': 'offset-value',
+                                                        'index': offset_key,
+                                                    },
+                                                    value=str(current_offset),
+                                                    type='text',
+                                                    # readonly=True,
+                                                    className='text-center',
+                                                    style={'fontWeight': 'bold'},
+                                                )
+                                            ],
+                                            width=True,
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                dbc.Button(
+                                                    '+',
+                                                    id={
+                                                        'type': 'offset-inc',
+                                                        'index': offset_key,
+                                                    },
+                                                    color='primary',
+                                                    size='sm',
+                                                    style={'width': '35px'},
+                                                )
+                                            ],
+                                            width='auto',
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                dbc.Button(
+                                                    '+10',
+                                                    id={
+                                                        'type': 'offset-inc-10',
+                                                        'index': offset_key,
+                                                    },
+                                                    color='secondary',
+                                                    size='sm',
+                                                    style={'width': '45px'},
+                                                )
+                                            ],
+                                            width='auto',
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                dbc.Button(
+                                                    'Reset',
+                                                    id={
+                                                        'type': 'offset-reset',
+                                                        'index': offset_key,
+                                                    },
+                                                    color='warning',
+                                                    size='sm',
+                                                    style={'width': '60px'},
+                                                )
+                                            ],
+                                            width='auto',
                                         ),
                                     ],
-                                    className='p-2',
-                                )
+                                    align='center',
+                                    className='g-1',
+                                ),
                             ],
-                            className='mb-2',
+                            className='p-2',
                         )
+                    ],
+                    className='mb-2',
+                )
 
-                        offset_controls.append(control)
+                offset_controls.append(control)
 
         return offset_controls
 
-    def _apply_offsets_to_components(self, offsets):
-        """Apply offsets to all components."""
+    def _apply_offsets_to_components(self, offsets: dict[str, int]):
+        """Apply offsets to components."""
         for comp_id, offset_value in offsets.items():
-            # Apply to the appropriate components
-            if comp_id == 'skeleton_imu_shared':
-                # Apply to skeleton and all IMU components
-                for comp in self._all_components:
-                    if comp._unique_id.startswith('skeleton_') or comp._unique_id.startswith('imu_'):
-                        comp.set_sync_offset(offset_value)
-            else:
-                # Apply to specific component
-                for comp in self._all_components:
-                    if comp._unique_id == comp_id:
-                        comp.set_sync_offset(offset_value)
-                        break
+            for comp in self._offset_components:
+                if comp._unique_id == comp_id:
+                    comp.set_offset(offset_value)
+                    break
 
     def activate_callbacks(self):
         @app.callback(
             Output('offsets-store', 'data'),
             Output('offset-update-trigger', 'data'),
             Output('offsets-container', 'children'),
+            Input({'type': 'offset-value', 'index': ALL}, 'value'),
             Input({'type': 'offset-dec-10', 'index': ALL}, 'n_clicks'),
             Input({'type': 'offset-dec', 'index': ALL}, 'n_clicks'),
             Input({'type': 'offset-inc', 'index': ALL}, 'n_clicks'),
@@ -385,6 +261,7 @@ class OffsetComponent(BaseComponent):
             prevent_initial_call=False,
         )
         def manage_offsets(
+            offset_input,
             dec_10_clicks,
             dec_clicks,
             inc_clicks,
@@ -392,7 +269,7 @@ class OffsetComponent(BaseComponent):
             reset_clicks,
             reset_all_clicks,
             offsets_from_load,
-            current_offsets,
+            current_offsets: dict[str, int],
             trigger_counter,
         ):
             ctx = callback_context
@@ -414,64 +291,53 @@ class OffsetComponent(BaseComponent):
                 return current_offsets, trigger_counter + 1, offset_controls
 
             # Handle button clicks
-            if ctx.triggered:
+            elif ctx.triggered:
                 trigger = ctx.triggered[0]
 
-                if trigger['prop_id'] == 'reset-all-offsets-btn.n_clicks':
+                prop_id: str = trigger['prop_id']
+                if prop_id == 'reset-all-offsets-btn.n_clicks':
                     # Reset all offsets
                     current_offsets = {}
                     # Reset all components
-                    for component_group in self._offset_components:
-                        for comp in component_group:
-                            comp.set_sync_offset(0)
-                else:
+                    for comp in self._offset_components:
+                        comp.set_offset(0)
+
+                elif '.n_clicks' in prop_id or '.value' in prop_id:
                     # Parse the trigger to find which button was clicked
-                    prop_id = trigger['prop_id']
+                    parsed_id = json.loads(prop_id.split('.')[0].replace("'", '"'))
+                    button_type = parsed_id['type']
+                    component_id = parsed_id['index']
+
+                    # Get current offset
+                    current_offset = current_offsets.get(component_id, 0)
+
                     if '.n_clicks' in prop_id:
-                        try:
-                            parsed_id = json.loads(prop_id.split('.')[0].replace("'", '"'))
-                            button_type = parsed_id['type']
-                            component_id = parsed_id['index']
+                        # Update offset based on button type
+                        if button_type == 'offset-dec-10':
+                            new_offset = current_offset - 10
+                        elif button_type == 'offset-dec':
+                            new_offset = current_offset - 1
+                        elif button_type == 'offset-inc':
+                            new_offset = current_offset + 1
+                        elif button_type == 'offset-inc-10':
+                            new_offset = current_offset + 10
+                        elif button_type == 'offset-reset':
+                            new_offset = 0
+                        else:
+                            new_offset = current_offset
 
-                            # Get current offset
-                            current_offset = current_offsets.get(component_id, 0)
+                    else:
+                        new_offset = int(trigger['value'])
 
-                            # Update offset based on button type
-                            if button_type == 'offset-dec-10':
-                                new_offset = current_offset - 10
-                            elif button_type == 'offset-dec':
-                                new_offset = current_offset - 1
-                            elif button_type == 'offset-inc':
-                                new_offset = current_offset + 1
-                            elif button_type == 'offset-inc-10':
-                                new_offset = current_offset + 10
-                            elif button_type == 'offset-reset':
-                                new_offset = 0
-                            else:
-                                new_offset = current_offset
+                    # Update offset in store
+                    if new_offset == 0:
+                        # Remove zero offsets
+                        current_offsets.pop(component_id, None)
+                    else:
+                        current_offsets[component_id] = new_offset
 
-                            # Update offset in store
-                            if new_offset == 0:
-                                # Remove zero offsets
-                                current_offsets.pop(component_id, None)
-                            else:
-                                current_offsets[component_id] = new_offset
-
-                            # Apply offset to components
-                            if component_id == 'skeleton_imu_shared':
-                                # Apply to skeleton and all IMU components
-                                for comp in self._all_components:
-                                    if comp._unique_id.startswith('skeleton_') or comp._unique_id.startswith('imu_'):
-                                        comp.set_sync_offset(new_offset)
-                            else:
-                                # Apply to specific component
-                                for comp in self._all_components:
-                                    if comp._unique_id == component_id:
-                                        comp.set_sync_offset(new_offset)
-                                        break
-
-                        except Exception as e:
-                            print(f'Error handling offset button: {e}')
+                    # Apply to specific component
+                    self._apply_offsets_to_components({component_id: new_offset})
 
             # Create offset controls UI
             offset_controls = self._create_offset_controls(self._offset_components, current_offsets)

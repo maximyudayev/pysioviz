@@ -31,12 +31,12 @@ from dash import html, dcc, Input, Output, State, callback_context, ALL
 import dash_bootstrap_components as dbc
 import numpy as np
 
-from pysioviz.components import BaseComponent
+from pysioviz.components.control import ControlComponent
 from pysioviz.utils.gui_utils import app
-from pysioviz.utils.types import Annotation, GlobalVariableId, GroundTruthLabel, InputId, TaskType, TriggerId
+from pysioviz.utils.types import GlobalVariableId, GroundTruthLabel, InputId, TaskType, TriggerId
 
 
-class AnnotationComponent(BaseComponent):
+class AnnotationComponent(ControlComponent):
     """Annotation management component.
 
     This component handles all annotation-related functionality.
@@ -48,11 +48,13 @@ class AnnotationComponent(BaseComponent):
     - Annotation counter.
     """
 
-    def __init__(self, annotation_options: list[GroundTruthLabel], combined_timestamps: np.ndarray):
+    def __init__(
+        self, annotation_options: list[GroundTruthLabel], combined_timestamps: np.ndarray, combined_toas: np.ndarray
+    ):
         self._annotation_options = annotation_options
         self._annotation_values = [opt.value for opt in annotation_options]
         self._combined_timestamps = combined_timestamps
-        self._create_layout()
+        self._combined_toas = combined_toas
         super().__init__(unique_id='annotation_panel')
 
     def _create_layout(self):
@@ -61,25 +63,17 @@ class AnnotationComponent(BaseComponent):
             label='📝 Annotations',
             tab_id='annotations-tab',
             children=[
-                dbc.Row(  # Tab title
-                    [
-                        dbc.Col(
-                            [html.H5('Annotations', className='text-center mb-2 mt-2')],
-                        ),
-                    ]
-                ),
-                dbc.Row(  # Annotation counter
-                    [
-                        dbc.Col(
-                            [html.Div(id='annotation-counter', className='text-center mb-2 fw-bold text-primary')]
-                        )
-                    ]
-                ),
                 dbc.Row(
                     [
-                        dbc.Col(  # Timestamp display input box
+                        dbc.Col(
                             [
-                                html.Div( # The timestamp from one of the UI components (including a precise point in the plots) will be displayed here, which can be copied to the annotation input fields
+                                html.H5(  # Tab title
+                                    'Annotations', className='text-center mb-2 mt-2'
+                                ),
+                                html.Div(  # Annotation counter
+                                    id='annotation-counter', className='text-center mb-2 fw-bold text-primary'
+                                ),
+                                html.Div(  # Timestamp display input box
                                     [
                                         dbc.Input(
                                             id=GlobalVariableId.SELECTED_TIMESTAMP.value,
@@ -92,11 +86,10 @@ class AnnotationComponent(BaseComponent):
                                     ],
                                     className='mb-2',
                                 ),
-                            ]
-                        )
+                            ],
+                        ),
                     ]
                 ),
-                # html.Hr(className='my-2'),
                 dbc.Row(  # Scrollable annotation area
                     dbc.Col(  # Container for existing annotations (will appear sorted)
                         [
@@ -313,18 +306,11 @@ class AnnotationComponent(BaseComponent):
             ],
         )
 
-    def _timestamp_to_frame(self, timestamp: float) -> int | None:
-        """Convert timestamp to frame ID using reference camera.
-        
-        TODO:
-        """
-        try:
-            frame = app.reference_camera.get_frame_for_timestamp(timestamp)
-            # Adjust for truncation
-            adjusted_frame = frame - app.reference_camera._start_frame
-            return adjusted_frame
-        except:
-            return None
+    def _toa_to_global_frame(self, toa_s: float) -> int:
+        """Convert timestamp to frame ID using reference camera."""
+        toa_diffs = np.abs(self._combined_toas - toa_s)
+        closest_idx = np.argmin(toa_diffs).item()
+        return closest_idx
 
     def _create_annotation_cards(self, annotations: list[dict], expanded_state: dict[str, bool]) -> list[dbc.Card]:
         """Helper function to create annotation cards."""
@@ -523,16 +509,15 @@ class AnnotationComponent(BaseComponent):
                 # Display mode - collapsible
                 try:
                     # Duration calculation
-                    start_val = float(ann['task_start_start'])
-                    end_val = float(ann['task_end_end'])
+                    start_val = float(ann['task_start_end'])
+                    end_val = float(ann['task_end_start'])
                     duration = end_val - start_val
                     duration_str = f'{duration:.2f}s'
                 except:
                     duration_str = 'N/A'
 
                 # Get frame IDs
-                # TODO: correct to use `frame_timestamp`
-                ts_start_frame = self._timestamp_to_frame(ann['task_start_start'])
+                ts_start_frame = self._toa_to_global_frame(float(ann['task_start_start']))
 
                 # Collapsed view - just show counter, label, start time, and duration
                 if not is_expanded:
@@ -567,11 +552,11 @@ class AnnotationComponent(BaseComponent):
                                                         },
                                                     ),
                                                     html.Span(
-                                                        f'{ann['label']}',
+                                                        f'{ann["label"]}',
                                                         className='fw-bold me-2',
                                                     ),
                                                     html.Small(
-                                                        f'@ {ann['task_start_start'][:10]}...',
+                                                        f'@ {ann["task_start_start"][:10]}...',
                                                         className='text-muted',
                                                     ),
                                                     html.Span(
@@ -626,11 +611,10 @@ class AnnotationComponent(BaseComponent):
                     )
                 else:
                     # Get all frame IDs for expanded view.
-                    # TODO: adjust to use frame_timestamp of merged aligned cameras.
-                    ts_start_frame = self._timestamp_to_frame(ann['task_start_start'])
-                    ts_end_frame = self._timestamp_to_frame(ann['task_start_end'])
-                    te_start_frame = self._timestamp_to_frame(ann['task_end_start'])
-                    te_end_frame = self._timestamp_to_frame(ann['task_end_end'])
+                    ts_start_frame = self._toa_to_global_frame(float(ann['task_start_start']))
+                    ts_end_frame = self._toa_to_global_frame(float(ann['task_start_end']))
+                    te_start_frame = self._toa_to_global_frame(float(ann['task_end_start']))
+                    te_end_frame = self._toa_to_global_frame(float(ann['task_end_end']))
 
                     # Expanded view - show all details
                     card = dbc.Card(
@@ -714,7 +698,7 @@ class AnnotationComponent(BaseComponent):
                                                 className='fw-bold text-muted',
                                             ),
                                             html.Small(
-                                                f' {ann['task_start_start']} → {ann['task_start_end']}',
+                                                f' {ann["task_start_start"]} → {ann["task_start_end"]}',
                                                 className='text-muted',
                                             ),
                                             html.Small(
@@ -733,7 +717,7 @@ class AnnotationComponent(BaseComponent):
                                                 className='fw-bold text-muted',
                                             ),
                                             html.Small(
-                                                f' {ann['task_end_start']} → {ann['task_end_end']}',
+                                                f' {ann["task_end_start"]} → {ann["task_end_end"]}',
                                                 className='text-muted',
                                             ),
                                             html.Small(

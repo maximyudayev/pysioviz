@@ -25,27 +25,21 @@
 #
 # ############
 
-from dash import Output, Input
+from abc import abstractmethod
+import dash_bootstrap_components as dbc
 
-from pysioviz.components.data import VideoComponent
-from pysioviz.utils.gui_utils import app
-from pysioviz.utils.types import GlobalVariableId
+from pysioviz.components import BaseComponent
 
 
-class ReferenceVideoComponent(VideoComponent):
-    def handle_click(self, ref_frame_timestamp, sync_timestamp):
-        frame_id = self.get_frame_for_timestamp(ref_frame_timestamp)
-        toa = self.get_toa_at_frame(frame_id)
-        return f'{self._legend_name} - toa_s: {toa:.5f}'
+class ControlComponent(BaseComponent):
+    def __init__(self, unique_id):
+        self._create_layout()
+        super().__init__(unique_id)
 
-    def activate_callbacks(self):
-        @app.callback(
-            Output('%s-video' % (self._unique_id), 'figure'),
-            Output('%s-timestamp' % (self._unique_id), 'children'),
-            Input(GlobalVariableId.REF_FRAME_TIMESTAMP.value, 'data'),
-        )
-        def update_camera(ref_timestamp):
-            # Reference cameras override camera callback to match frame
-            #   by closest `frame_timestamp` among each other, selected by frame slider.
-            self._current_frame_id = self.get_frame_for_timestamp(ref_timestamp)
-            return self._generate_patch_from_frame(self._current_frame_id)
+    @property
+    def layout(self) -> dbc.Row | dbc.Tab:
+        return self._layout
+
+    @abstractmethod
+    def _create_layout(self) -> None:
+        pass

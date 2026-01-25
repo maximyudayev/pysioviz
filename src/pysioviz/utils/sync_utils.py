@@ -33,14 +33,14 @@ from pysioviz.utils.types import AlignmentInfo
 
 def extract_refticks_from_cameras(
     camera_components: list[VideoComponent],
-) -> tuple[np.ndarray, dict[str, AlignmentInfo], float, float]:
+) -> tuple[np.ndarray, np.ndarray, dict[str, AlignmentInfo], float, float]:
     """Calculate truncation points w.r.t the reference camera.
 
     Args:
         camera_components (list[VideoComponent]): List of cameras as reference for annotation and analysis.
 
     Returns:
-        tuple[np.ndarray, dict[str, AlignmentInfo], float, float]: Camera frame timestamps for complete trial,
+        tuple[np.ndarray, dict[str, AlignmentInfo], float, float]: Camera frame timestamps and toas for complete trial,
           videos alignment info, experiment start UNIX time, experiment end UNIX time.
     """
     if not camera_components:
@@ -106,15 +106,19 @@ def extract_refticks_from_cameras(
         claimed[idx_in_combined[contributes]] = True
 
     camera_timestamps = []
+    camera_toas = []
     for cam_info, indices in zip(camera_infos, result_indices):
         start_id = camera_align_info[cam_info.unique_id].start_id
         end_id = camera_align_info[cam_info.unique_id].end_id
         timestamps = cam_info.frame_timestamp[start_id:end_id][indices]
+        toas = cam_info.toa_s[start_id:end_id][indices]
         if timestamps.shape[0]:
             camera_timestamps.append(timestamps)
+            camera_toas.append(toas)
 
     # Merged timestamps to map slider ticks to the aligned frame timestamps of synchronized cameras.
     combined_timestamps = np.unique(np.hstack(camera_timestamps))
+    combined_toas = np.unique(np.hstack(camera_toas))
 
     # ======================================
     # Specify the start and end of the trial
@@ -122,7 +126,8 @@ def extract_refticks_from_cameras(
     start_trial_toa = np.min(camera_start_toas)
     end_trial_toa = np.min(camera_end_toas)
 
-    return combined_timestamps, camera_align_info, start_trial_toa, end_trial_toa
+    return combined_timestamps, combined_toas, camera_align_info, start_trial_toa, end_trial_toa
+
 
 def add_alignment_info(components: list[DataComponent], alignment_info: dict[str, AlignmentInfo]) -> None:
     for component in components:
