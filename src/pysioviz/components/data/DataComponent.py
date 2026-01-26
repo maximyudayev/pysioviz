@@ -68,7 +68,7 @@ class DataComponent(BaseComponent):
         pass
 
     def get_frame_for_toa(self, sync_timestamp: float) -> int:
-        """Find the index closest to a given timestamp with offset."""
+        """Find the sample index closest but not later than a given timestamp, respecting alignment offset."""
         time_diffs = (self._toa_s - (sync_timestamp + self._offset_s)) <= 0
         return max(np.sum(time_diffs).item() - 1, 0)
     

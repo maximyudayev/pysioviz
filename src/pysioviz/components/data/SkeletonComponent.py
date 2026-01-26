@@ -46,6 +46,7 @@ class SkeletonComponent(DataComponent):
         ref_counter_path: str,
         unique_id: str,
         legend_name: str,
+        div_height: str = '40vh',
     ):
         self._hdf5_path = hdf5_path
         self._position_path = position_path
@@ -119,7 +120,7 @@ class SkeletonComponent(DataComponent):
             clear_on_unhover=True,
             style={
                 'width': '100%',
-                'height': '60vh',
+                'height': div_height,
             },
         )
 

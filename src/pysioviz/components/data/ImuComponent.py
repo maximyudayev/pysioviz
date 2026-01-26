@@ -206,37 +206,25 @@ class ImuComponent(DataComponent):
             'timestamps': self._toa_s,
         }
 
-    def set_truncation_points(self, start_idx: int, end_idx: int):
-        self._start_idx = int(max(0, start_idx))
-        self._end_idx = int(min(len(self._toa_s) - 1, end_idx))
-        print(f'{self._legend_name}: Start index = {self._start_idx}', flush=True)
-
     def make_click_input(self):
-        return Input(f'imu_{self._sensor_type}-imu-plot', 'clickData')
+        return Input(f'{self._unique_id}-imu-plot', 'clickData')
 
     def handle_click(self, ref_frame_timestamp, sync_timestamp):
         sample_id = self.get_frame_for_toa(sync_timestamp)
         toa_s = self._toa_s[sample_id].item() if sample_id < len(self._toa_s) else 0
         return f'IMU {self._sensor_type} - toa_s: {toa_s:.5f} (index: {sample_id})'
 
-    def _create_figure(self, center_idx: int, joint_idx: int) -> go.Figure:
-        # Create the line plot figure for the given center index and joint
-        # Ensure center_idx is within bounds
-        center_idx = max(0, min(center_idx, len(self._data) - 1))
+    def _create_figure(self, sync_timestamp: float, joint_idx: int) -> go.Figure:
+        center_idx = self.get_frame_for_toa(sync_timestamp)
+        start_idx = self.get_frame_for_toa(sync_timestamp - (self._plot_window_seconds / 2))
+        end_idx = self.get_frame_for_toa(sync_timestamp + (self._plot_window_seconds / 2))
 
-        # Calculate window bounds
-        window_samples = int(self._plot_window_seconds * self._sampling_rate)
-        half_window = window_samples // 2
-
-        start_idx = max(0, center_idx - half_window)
-        end_idx = min(len(self._data) - 1, center_idx + half_window)
-
-        # Get data slice for the selected joint
-        data_slice = self._data[start_idx : end_idx + 1, joint_idx, :]  # Shape: (samples, 3)
-        time_slice = np.arange(len(data_slice)) / self._sampling_rate
+        # Get data slice
+        data_slice = self._data[start_idx:end_idx+1, joint_idx, :]
+        time_slice = self._toa_s[start_idx:end_idx+1] - self._toa_s[start_idx]
 
         # Calculate where the red line should be (current position in window)
-        red_line_position = (center_idx - start_idx) / self._sampling_rate
+        red_line_position = self._toa_s[center_idx] - self._toa_s[start_idx]
 
         # Create subplots for X, Y, Z
         fig = make_subplots(
@@ -260,7 +248,7 @@ class ImuComponent(DataComponent):
                     name=axes[i],
                     line=dict(width=1, color=colors[i]),
                 ),
-                row=i + 1,
+                row=i+1,
                 col=1,
             )
 
@@ -269,11 +257,25 @@ class ImuComponent(DataComponent):
                 x=red_line_position,
                 line_dash='dash',
                 line_color='red',
-                row=i + 1,
+                row=i+1,
                 col=1,
             )
 
-        return fig
+        # Update layout
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(l=0, r=0, t=0, b=0),
+            autosize=True,
+        )
+
+        fig.update_xaxes(
+            title_text='Time (s)',
+            range=[0, self._plot_window_seconds],
+            row=3,
+            col=1,
+        )
+
+        return fig, center_idx
 
     def activate_callbacks(self):
         @app.callback(
@@ -290,38 +292,16 @@ class ImuComponent(DataComponent):
                 joint_idx = selected_joint if selected_joint is not None else 0
 
                 if sync_timestamp is not None:
-                    # Find the index matching the sync timestamp
-                    current_idx = self.get_frame_for_toa(sync_timestamp)
-
-                    # Create the figure
-                    fig = self._create_figure(current_idx, joint_idx)
-
-                    # Get timestamp for display
-                    timestamp = self._toa_s[current_idx] if current_idx < len(self._toa_s) else 0
-                    timestamp_float = float(timestamp)
-                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {current_idx})'
-
+                    fig, center_idx = self._create_figure(sync_timestamp, joint_idx)
                 else:
                     # Show initial data at start_idx if no sync
-                    fig = self._create_figure(self._start_idx, joint_idx)
-                    timestamp = self._toa_s[self._start_idx] if self._start_idx < len(self._toa_s) else 0
-                    timestamp_float = float(timestamp)
-                    timestamp_text = f'toa_s: {timestamp_float:.5f} (index: {self._start_idx})'
+                    fig, center_idx = self._create_figure(self._first_timestamp, joint_idx)
 
-                # Update layout
-                fig.update_layout(
-                    showlegend=False,
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    autosize=True,
-                )
+                # Get timestamp for display
+                toa_s = self._toa_s[center_idx]
+                toa_text = f'toa_s: {toa_s:.5f} (index: {center_idx})'
 
-                fig.update_xaxes(title_text='Time (s)', row=3, col=1)
-
-                # Update y-axes with consistent range
-                for i in range(3):
-                    fig.update_yaxes(title_text=self._y_units, range=self._y_range, row=i + 1, col=1)
-
-                return fig, f'{timestamp_text} [offset: {self._offset_s*1000:+.0f}ms]'
+                return fig, f'{toa_text} [offset: {self._offset_s*1000:+.0f}ms]'
 
             except Exception as e:
                 print(f'Error updating IMU plot: {e}', flush=True)

@@ -39,7 +39,7 @@ from pysioviz.components.data import (
     VideoComponent,
     ImuComponent,
     SkeletonComponent,
-    LinePlotComponent,
+    MotorComponent,
 )
 from pysioviz.utils.sync_utils import add_alignment_info, extract_refticks_from_cameras
 from pysioviz.utils.gui_utils import app
@@ -183,27 +183,94 @@ if __name__ == '__main__':
     # ======
     # MOTORS
     # ======
-    # motors_component = LinePlotComponent(
-    #     hdf5_path=str(exo_hdf5_path),
-    #     data_path=[
-    #     '/revalexo/motor_hip_right/position',
-    #     '/revalexo/motor_knee_right/position',
-    #     '/revalexo/motor_hip_left/position',
-    #     '/revalexo/motor_knee_left/position',
-    #     ],
-    #     timestamp_path=[
-    #     '/revalexo/motor_hip_right/timestamp',
-    #     '/revalexo/motor_knee_right/timestamp',
-    #     '/revalexo/motor_hip_left/timestamp',
-    #     '/revalexo/motor_knee_left/timestamp',
-    #     ],
-    #     unique_id='motor_angles',
-    #     legend_name='Motor Angles',
-    #     channel_names=['Hip Right', 'Knee Right', 'Hip Left', 'Knee Left'],
-    #     plot_window_seconds=10,
-    #     sampling_rate=50.0,
-    #     y_units="degrees"
-    # )
+    motor_hip_right_component = MotorComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/motor_hip_right',
+        features=[
+            'position',
+            'velocity',
+            'current',
+            'temperature',
+            'error',
+        ],
+        units=[
+            'degrees',
+            'RPM',
+            'A',
+            'C',
+            '#',
+        ],
+        unique_id='motor_hip_right',
+        legend_name='Motor Hip Right',
+        plot_window_seconds=5,
+        sampling_rate=50.0,
+    )
+    motor_knee_right_component = MotorComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/motor_knee_right',
+        features=[
+            'position',
+            'velocity',
+            'current',
+            'temperature',
+            'error',
+        ],
+        units=[
+            'degrees',
+            'RPM',
+            'A',
+            'C',
+            '#',
+        ],
+        unique_id='motor_knee_right',
+        legend_name='Motor Knee Right',
+        plot_window_seconds=5,
+        sampling_rate=50.0,
+    )
+    motor_hip_left_component = MotorComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/motor_hip_left',
+        features=[
+            'position',
+            'velocity',
+            'current',
+            'temperature',
+            'error',
+        ],
+        units=[
+            'degrees',
+            'RPM',
+            'A',
+            'C',
+            '#',
+        ],
+        unique_id='motor_hip_left',
+        legend_name='Motor Hip Left',
+        plot_window_seconds=5,
+        sampling_rate=50.0,
+    )
+    motor_knee_left_component = MotorComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/motor_knee_left',
+        features=[
+            'position',
+            'velocity',
+            'current',
+            'temperature',
+            'error',
+        ],
+        units=[
+            'degrees',
+            'RPM',
+            'A',
+            'C',
+            '#',
+        ],
+        unique_id='motor_knee_left',
+        legend_name='Motor Knee Left',
+        plot_window_seconds=5,
+        sampling_rate=50.0,
+    )
 
     # ========
     # SKELETON
@@ -216,6 +283,7 @@ if __name__ == '__main__':
         ref_counter_path='/mvn-analyze/xsens-time/counter',
         unique_id='skeleton_mvn',
         legend_name='Skeleton',
+        div_height='40vh',
     )
 
     # ============
@@ -274,7 +342,10 @@ if __name__ == '__main__':
         imu_acc_component,
         imu_gyr_component,
         imu_mag_component,
-        # TODO: motors
+        motor_hip_right_component,
+        motor_knee_right_component,
+        motor_hip_left_component,
+        motor_knee_left_component,
         # TODO: integrated IMUs
     ]
 
@@ -332,17 +403,37 @@ if __name__ == '__main__':
         width=9,
     )
 
-    # Skeleton from Xsens
-    skeleton = dbc.Col(
+    # Skeleton from Xsens and egocentric view
+    skeleton_and_ego = dbc.Col(
         [
-            skeleton_component.layout,
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [skeleton_component.layout],
+                        width=12,
+                        align='center',
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [eye_component.layout],
+                        width=12,
+                    )
+                ]
+            )
         ],
         width=3,
-        align='center',
     )
 
-    # Egocentric view
-    ego_view = dbc.Col([eye_component.layout], width=3)
+    # Motors
+    motors_row = [
+        dbc.Col([motor_hip_right_component.layout], width=3),
+        dbc.Col([motor_knee_right_component.layout], width=3),
+        dbc.Col([motor_hip_left_component.layout], width=3),
+        dbc.Col([motor_knee_left_component.layout], width=3),
+    ]
 
     # Wearable IMUs
     imu_row = [
@@ -389,15 +480,12 @@ if __name__ == '__main__':
                         [
                             dbc.Row(  # Skeleton and reference cameras
                                 [
-                                    skeleton,
+                                    skeleton_and_ego,
                                     camera_grid,
                                 ]
                             ),
-                            dbc.Row(  # Motors and ego view
-                                [
-                                    ego_view,
-                                    # TODO: motors
-                                ]
+                            dbc.Row(  # Motors
+                                motors_row
                             ),
                             dbc.Row(  # Wearable IMUs
                                 imu_row,
