@@ -49,7 +49,6 @@ class ImuComponent(DataComponent):
         legend_name: str,
         sensor_type: str,  # 'accelerometer', 'gyroscope', or 'magnetometer'
         plot_window_seconds: float = 1.0,
-        sampling_rate: float = 60.0,
     ):
         self._hdf5_path = hdf5_path
         self._data_path = data_path
@@ -59,7 +58,6 @@ class ImuComponent(DataComponent):
         self._legend_name = legend_name
         self._sensor_type = sensor_type
         self._plot_window_seconds = plot_window_seconds
-        self._sampling_rate = sampling_rate
 
         # Joint names corresponding to the 17 sensors (taken from the description from the HDF5 file)
         self._joint_names = [
@@ -247,6 +245,7 @@ class ImuComponent(DataComponent):
                     mode='lines',
                     name=axes[i],
                     line=dict(width=1, color=colors[i]),
+                    # yaxis=dict(title_text=self._y_units)
                 ),
                 row=i+1,
                 col=1,

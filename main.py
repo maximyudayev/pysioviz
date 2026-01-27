@@ -35,6 +35,7 @@ import dash_bootstrap_components as dbc
 from pysioviz.components.control import AnnotationComponent, FrameSliderComponent, OffsetComponent, SaveLoadComponent
 from pysioviz.components.data import (
     DataComponent,
+    ExoImuComponent,
     ReferenceVideoComponent,
     VideoComponent,
     ImuComponent,
@@ -203,7 +204,6 @@ if __name__ == '__main__':
         unique_id='motor_hip_right',
         legend_name='Motor Hip Right',
         plot_window_seconds=5,
-        sampling_rate=50.0,
     )
     motor_knee_right_component = MotorComponent(
         hdf5_path=str(exo_hdf5_path),
@@ -225,7 +225,6 @@ if __name__ == '__main__':
         unique_id='motor_knee_right',
         legend_name='Motor Knee Right',
         plot_window_seconds=5,
-        sampling_rate=50.0,
     )
     motor_hip_left_component = MotorComponent(
         hdf5_path=str(exo_hdf5_path),
@@ -247,7 +246,6 @@ if __name__ == '__main__':
         unique_id='motor_hip_left',
         legend_name='Motor Hip Left',
         plot_window_seconds=5,
-        sampling_rate=50.0,
     )
     motor_knee_left_component = MotorComponent(
         hdf5_path=str(exo_hdf5_path),
@@ -269,7 +267,38 @@ if __name__ == '__main__':
         unique_id='motor_knee_left',
         legend_name='Motor Knee Left',
         plot_window_seconds=5,
-        sampling_rate=50.0,
+    )
+
+    # ============
+    # EMBEDDED IMU
+    # ============
+    exo_imu_thigh_right_component = ExoImuComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/nicla_thigh_right',
+        unique_id='nicla_thigh_right',
+        legend_name='Nicla Thigh Right',
+        plot_window_seconds=5,
+    )
+    exo_imu_shank_right_component = ExoImuComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/nicla_shank_right',
+        unique_id='nicla_shank_right',
+        legend_name='Nicla Shank Right',
+        plot_window_seconds=5,
+    )
+    exo_imu_thigh_left_component = ExoImuComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/nicla_thigh_left',
+        unique_id='nicla_thigh_left',
+        legend_name='Nicla Thigh Left',
+        plot_window_seconds=5,
+    )
+    exo_imu_shank_left_component = ExoImuComponent(
+        hdf5_path=str(exo_hdf5_path),
+        data_path='/revalexo/nicla_shank_left',
+        unique_id='nicla_shank_left',
+        legend_name='Nicla Shank Left',
+        plot_window_seconds=5,
     )
 
     # ========
@@ -289,7 +318,7 @@ if __name__ == '__main__':
     # ============
     # Wearable IMU
     # ============
-    imu_acc_component = ImuComponent(
+    wearable_imu_acc_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/acceleration',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -299,10 +328,9 @@ if __name__ == '__main__':
         legend_name='Accelerometer',
         sensor_type='accelerometer',
         plot_window_seconds=10,
-        sampling_rate=60.0,
     )
 
-    imu_gyr_component = ImuComponent(
+    wearable_imu_gyr_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/gyroscope',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -312,10 +340,9 @@ if __name__ == '__main__':
         legend_name='Gyroscope',
         sensor_type='gyroscope',
         plot_window_seconds=10,
-        sampling_rate=60.0,
     )
 
-    imu_mag_component = ImuComponent(
+    wearable_imu_mag_component = ImuComponent(
         hdf5_path=str(mvn_hdf5_path),
         data_path='/mvn-analyze/xsens-motion-trackers/magnetometer',
         data_counter_path='/mvn-analyze/xsens-motion-trackers/counter',
@@ -325,7 +352,6 @@ if __name__ == '__main__':
         legend_name='Magnetometer',
         sensor_type='magnetometer',
         plot_window_seconds=10,
-        sampling_rate=60.0,
     )
 
     # =============================================
@@ -339,14 +365,17 @@ if __name__ == '__main__':
     offset_components: list[DataComponent] = [
         eye_component,
         skeleton_component,
-        imu_acc_component,
-        imu_gyr_component,
-        imu_mag_component,
+        wearable_imu_acc_component,
+        wearable_imu_gyr_component,
+        wearable_imu_mag_component,
         motor_hip_right_component,
         motor_knee_right_component,
         motor_hip_left_component,
         motor_knee_left_component,
-        # TODO: integrated IMUs
+        exo_imu_thigh_right_component,
+        exo_imu_shank_right_component,
+        exo_imu_thigh_left_component,
+        exo_imu_shank_left_component,
     ]
 
     data_components: list[DataComponent] = [
@@ -436,10 +465,18 @@ if __name__ == '__main__':
     ]
 
     # Wearable IMUs
-    imu_row = [
-        dbc.Col([imu_acc_component.layout], width=4),
-        dbc.Col([imu_gyr_component.layout], width=4),
-        dbc.Col([imu_mag_component.layout], width=4),
+    embedded_imu_row = [
+        dbc.Col([exo_imu_thigh_right_component.layout], width=3),
+        dbc.Col([exo_imu_shank_right_component.layout], width=3),
+        dbc.Col([exo_imu_thigh_left_component.layout], width=3),
+        dbc.Col([exo_imu_shank_left_component.layout], width=3),
+    ]
+
+    # Wearable IMUs
+    wearable_imu_row = [
+        dbc.Col([wearable_imu_acc_component.layout], width=4),
+        dbc.Col([wearable_imu_gyr_component.layout], width=4),
+        dbc.Col([wearable_imu_mag_component.layout], width=4),
     ]
 
     # Frame slider
@@ -487,8 +524,11 @@ if __name__ == '__main__':
                             dbc.Row(  # Motors
                                 motors_row
                             ),
+                            dbc.Row(  # Exo IMUs
+                                embedded_imu_row
+                            ),
                             dbc.Row(  # Wearable IMUs
-                                imu_row,
+                                wearable_imu_row,
                                 id='imu-row',
                                 style={
                                     'margin-bottom': '250px',
