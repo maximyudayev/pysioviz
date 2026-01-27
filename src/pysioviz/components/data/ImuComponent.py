@@ -101,7 +101,7 @@ class ImuComponent(DataComponent):
 
         self._graph = dcc.Graph(
             id=f'{unique_id}-imu-plot',
-            config={'displayModeBar': True},
+            config={'displayModeBar': False},
             responsive=True,
             clear_on_unhover=True,
             style={
@@ -230,7 +230,6 @@ class ImuComponent(DataComponent):
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.02,
-            subplot_titles=['X', 'Y', 'Z'],
         )
 
         # Add traces for each axis
@@ -245,19 +244,22 @@ class ImuComponent(DataComponent):
                     mode='lines',
                     name=axes[i],
                     line=dict(width=1, color=colors[i]),
-                    # yaxis=dict(title_text=self._y_units)
                 ),
                 row=i+1,
                 col=1,
             )
+
+            # fig.update_yaxes(
+            #     title_text=f'{['X', 'Y', 'Z'][i]} ({self._y_units})',
+            #     row=i+1,
+            #     col=1,
+            # )
 
             # Add vertical line at current position
             fig.add_vline(
                 x=red_line_position,
                 line_dash='dash',
                 line_color='red',
-                row=i+1,
-                col=1,
             )
 
         # Update layout

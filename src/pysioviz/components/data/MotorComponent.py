@@ -60,7 +60,7 @@ class MotorComponent(DataComponent):
         # Create layout
         self._graph = dcc.Graph(
             id=f'{unique_id}-motor-plot',
-            config={'displayModeBar': True},
+            config={'displayModeBar': False},
             responsive=True,
             clear_on_unhover=True,
             style={
@@ -167,9 +167,9 @@ class MotorComponent(DataComponent):
             title_text='Time (s)',
             range=[0, self._plot_window_seconds],
         )
-        fig.update_yaxes(
-            title_text=self._units[selected_feature],
-        )
+        # fig.update_yaxes(
+        #     title_text=self._units[selected_feature],
+        # )
 
         return fig, center_idx
 

@@ -56,7 +56,7 @@ class ExoImuComponent(DataComponent):
         # Create layout
         self._graph = dcc.Graph(
             id=f'{unique_id}-exo_imu-plot',
-            config={'displayModeBar': True},
+            config={'displayModeBar': False},
             responsive=True,
             clear_on_unhover=True,
             style={
@@ -143,28 +143,39 @@ class ExoImuComponent(DataComponent):
                         x=time_slice,
                         y=data_slice[:, j],
                         mode='lines',
-                        name=f'{feature_name} ({['X', 'Y', 'Z'][j]})',
+                        name=f'{['Euler', 'Gyro'][i]} ({['X', 'Y', 'Z'][j]})',
                         line=dict(width=1, color=['blue', 'green', 'red'][j]),
-                        # yaxis=dict(title_text=['°', 'm/s'][i])
                     ),
                     row=i+1,
                     col=1,
                 )
 
-                # Add vertical line at current position
-                fig.add_vline(
-                    x=red_line_position,
-                    line_dash='dash',
-                    line_color='red',
-                    row=i+1,
-                    col=1,
-                )
+                # fig.update_yaxes(
+                #     title_text=['°', 'm/s'][i],
+                #     row=i+1,
+                #     col=1,
+                # )
+
+        # Add vertical line at current position
+        fig.add_vline(
+            x=red_line_position,
+            line_dash='dash',
+            line_color='red',
+        )
 
         fig.update_layout(
-            showlegend=False,
+            # showlegend=False,
             margin=dict(l=0, r=0, t=0, b=0),
             autosize=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
         )
+
 
         fig.update_xaxes(
             title_text='Time (s)',
