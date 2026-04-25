@@ -28,7 +28,7 @@
 import numpy as np
 import h5py
 
-from dash import Output, Input, dcc, html
+from dash import Output, Input, State, dcc, html
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -52,8 +52,30 @@ class ExoImuComponent(DataComponent):
         self._plot_window_seconds = plot_window_seconds
         self._features = ['euler', 'gyroscope']
         self._data: dict[str, np.ndarray] = {feat: None for feat in self._features}
+        self._dimensions = [
+            {
+                'label': 'X',
+                'value': 0
+            }, 
+            {
+                'label': 'Y',
+                'value': 1,
+            }, 
+            {
+                'label': 'Z',
+                'value': 2,
+            }, 
+        ]
 
         # Create layout
+        self._checklist = dcc.Checklist(
+            id=f'{unique_id}-exo_imu-checklist',
+            options=self._dimensions,
+            value=list(map(lambda x: x['value'], self._dimensions)),
+            style={'marginBottom': '10px'},
+            inline=True,
+        )
+
         self._graph = dcc.Graph(
             id=f'{unique_id}-exo_imu-plot',
             config={'displayModeBar': False},
@@ -74,6 +96,7 @@ class ExoImuComponent(DataComponent):
         self._layout = html.Div(
             [
                 html.H6(self._legend_name, className='text-center mb-2'),
+                self._checklist,
                 self._graph,
                 self._timestamp_display,
             ],
@@ -113,7 +136,7 @@ class ExoImuComponent(DataComponent):
         toa_s = self._toa_s[sample_id].item() if sample_id < len(self._toa_s) else 0
         return f'{self._legend_name} - toa_s: {toa_s:.5f} (index: {sample_id})'
 
-    def _create_figure(self, sync_timestamp: float):
+    def _create_figure(self, sync_timestamp: float, checklist: list[int]):
         """Create the line plot figure for the given center index."""
         center_idx = self.get_frame_for_toa(sync_timestamp)
         start_idx = self.get_frame_for_toa(sync_timestamp - (self._plot_window_seconds / 2))
@@ -131,13 +154,12 @@ class ExoImuComponent(DataComponent):
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.02,
-            # subplot_titles=['Euler', 'Gyro'],
         )
 
         # Create plot
         for i, feature_name in enumerate(self._features):
             data_slice = self._data[feature_name][start_idx:end_idx+1]
-            for j in range(3):
+            for j in checklist:
                 fig.add_trace(
                     go.Scatter(
                         x=time_slice,
@@ -164,18 +186,10 @@ class ExoImuComponent(DataComponent):
         )
 
         fig.update_layout(
-            # showlegend=False,
+            showlegend=False,
             margin=dict(l=0, r=0, t=0, b=0),
             autosize=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
         )
-
 
         fig.update_xaxes(
             title_text='Time (s)',
@@ -191,16 +205,18 @@ class ExoImuComponent(DataComponent):
             Output(f'{self._unique_id}-exo_imu-plot', 'figure'),
             Output(f'{self._unique_id}-timestamp', 'children'),
             Input(GlobalVariableId.SYNC_TIMESTAMP.value, 'data'),
+            Input(f'{self._unique_id}-exo_imu-checklist', 'value'),
             Input('offset-update-trigger', 'data'),
+            State(f'{self._unique_id}-exo_imu-checklist', 'value'),
             prevent_initial_call=False,
         )
-        def update_plot(sync_timestamp, offset_trigger):
+        def update_plot(sync_timestamp, _, offset_trigger, checklist):
             try:
                 if sync_timestamp is not None:
-                    fig, center_idx = self._create_figure(sync_timestamp)
+                    fig, center_idx = self._create_figure(sync_timestamp, checklist)
                 else:
                     # Show initial data at start_idx if no sync
-                    fig, center_idx = self._create_figure(self._first_timestamp)
+                    fig, center_idx = self._create_figure(self._first_timestamp, checklist)
 
                 # Get timestamp for display
                 toa_s = self._toa_s[center_idx]
