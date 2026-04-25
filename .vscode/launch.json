@@ -12,7 +12,7 @@
             "program": "main.py",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
-                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Documents/Code/Projects/kdd2026/data/project_Revalexo/type_Transparent/trial_1"
+                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Documents/Code/Projects/kdd2026/data/project_Revalexo/type_Manual/trial_0"
             },
             "console": "integratedTerminal",
             "subProcess": true,
