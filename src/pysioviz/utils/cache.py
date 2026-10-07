@@ -209,6 +209,8 @@ def _video_decoder_worker_entry(
                     f'{start_s:.4f}',
                     '-i',
                     video_path,
+                    '-vf',
+                    f'scale={width}:{height}',
                     '-f',
                     'rawvideo',
                     '-pix_fmt',
@@ -290,6 +292,44 @@ class VideoDecoderSubprocessManager:
     and its shared memory circular buffer.
     """
 
+    @staticmethod
+    def _compute_scaled_dimensions(
+        orig_width: int,
+        orig_height: int,
+        target_width: Optional[int] = None,
+        target_height: Optional[int] = 320,
+    ) -> Tuple[int, int]:
+        """Calculates scaled width and height preserving aspect ratio, ensuring even dimensions."""
+        if orig_width <= 0 or orig_height <= 0:
+            fallback_w = (orig_width // 2) * 2 if orig_width > 0 else 568
+            fallback_h = (orig_height // 2) * 2 if orig_height > 0 else 320
+            return max(2, fallback_w), max(2, fallback_h)
+
+        if target_width is None and target_height is None:
+            return max(2, (orig_width // 2) * 2), max(2, (orig_height // 2) * 2)
+
+        scale_w = target_width / orig_width if target_width is not None else 1.0
+        scale_h = target_height / orig_height if target_height is not None else 1.0
+
+        if target_width is not None and target_height is not None:
+            scale = min(scale_w, scale_h)
+        elif target_height is not None:
+            scale = scale_h
+        else:
+            scale = scale_w
+
+        # If already smaller or equal, do not upscale
+        if scale >= 1.0:
+            return max(2, (orig_width // 2) * 2), max(2, (orig_height // 2) * 2)
+
+        scaled_w = int(round(orig_width * scale))
+        scaled_h = int(round(orig_height * scale))
+
+        # Ensure dimensions are positive and even (multiples of 2) for FFmpeg compatibility
+        scaled_w = max(2, (scaled_w // 2) * 2)
+        scaled_h = max(2, (scaled_h // 2) * 2)
+        return scaled_w, scaled_h
+
     def __init__(
         self,
         unique_id: str,
@@ -299,14 +339,26 @@ class VideoDecoderSubprocessManager:
         width: int,
         height: int,
         buf_len: int = 60,
+        target_height: Optional[int] = 320,
+        target_width: Optional[int] = None,
     ):
         self.unique_id = unique_id
         self.video_path = video_path
         self.toas = np.asarray(toas).squeeze()
         self.fps = float(fps)
-        self.width = int(width)
-        self.height = int(height)
+        self.orig_width = int(width)
+        self.orig_height = int(height)
+        self.target_height = target_height
+        self.target_width = target_width
         self.buf_len = int(buf_len)
+
+        # Compute scaled resolution to conserve shared memory and decode overhead
+        self.width, self.height = self._compute_scaled_dimensions(
+            self.orig_width,
+            self.orig_height,
+            target_width=self.target_width,
+            target_height=self.target_height,
+        )
 
         # Unique shared memory name
         pid = os.getpid()

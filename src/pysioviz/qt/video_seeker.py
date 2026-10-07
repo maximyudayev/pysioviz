@@ -28,6 +28,8 @@ class VideoSeekerWorker(QtCore.QThread):
         fps: float = 30.0,
         hwaccel: str = HwAccelEnum.D3D12VA.value,
         prefetch_window_s: float = 2.0,
+        target_height: Optional[int] = 320,
+        target_width: Optional[int] = None,
         parent: Optional[QtCore.QObject] = None,
     ):
         super().__init__(parent)
@@ -37,7 +39,7 @@ class VideoSeekerWorker(QtCore.QThread):
         self.hwaccel = hwaccel
 
         # Get video properties via ffprobe
-        self._width, self._height, self._fps, self._total_frames = self._get_video_properties(fallback_fps=fps)
+        self._orig_width, self._orig_height, self._fps, self._total_frames = self._get_video_properties(fallback_fps=fps)
         if len(self.toas) > 0:
             self._total_frames = max(self._total_frames, len(self.toas))
 
@@ -55,10 +57,14 @@ class VideoSeekerWorker(QtCore.QThread):
             video_path=self.video_path,
             toas=self.toas,
             fps=self._fps,
-            width=self._width,
-            height=self._height,
+            width=self._orig_width,
+            height=self._orig_height,
             buf_len=self._buf_len,
+            target_height=target_height,
+            target_width=target_width,
         )
+        self._width = self._decoder_mgr.width
+        self._height = self._decoder_mgr.height
 
     @property
     def fps(self) -> float:
@@ -70,6 +76,8 @@ class VideoSeekerWorker(QtCore.QThread):
 
     @property
     def aspect_ratio(self) -> float:
+        if self._orig_height > 0:
+            return self._orig_width / self._orig_height
         if self._height > 0:
             return self._width / self._height
         return 16.0 / 9.0
@@ -110,11 +118,12 @@ class VideoSeekerWorker(QtCore.QThread):
         cached = self._decoder_mgr.get_frame(frame_id)
         if cached is not None:
             frame_arr, actual_toa = cached
+            h, w = frame_arr.shape[:2]
             image = QtGui.QImage(
                 frame_arr.data,
-                self._width,
-                self._height,
-                self._width * 3,
+                w,
+                h,
+                w * 3,
                 QtGui.QImage.Format.Format_RGB888,
             ).copy()
             self.frame_ready.emit(self.unique_id, frame_id, actual_toa, image)
@@ -143,11 +152,12 @@ class VideoSeekerWorker(QtCore.QThread):
             res = self._decoder_mgr.wait_for_frame(target_frame_id, timeout_s=2.5)
             if res is not None:
                 frame_arr, actual_toa = res
+                h, w = frame_arr.shape[:2]
                 image = QtGui.QImage(
                     frame_arr.data,
-                    self._width,
-                    self._height,
-                    self._width * 3,
+                    w,
+                    h,
+                    w * 3,
                     QtGui.QImage.Format.Format_RGB888,
                 ).copy()
                 self.frame_ready.emit(self.unique_id, target_frame_id, actual_toa, image)

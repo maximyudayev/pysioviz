@@ -85,6 +85,32 @@ class NotesEditorDock(QtWidgets.QDockWidget):
                 border-color: #38bdf8;
                 color: #ffffff;
             }
+            QRadioButton {
+                color: #cbd5e1;
+                font-size: 11px;
+                spacing: 5px;
+            }
+            QRadioButton:hover {
+                color: #ffffff;
+            }
+            QRadioButton:checked {
+                color: #38bdf8;
+                font-weight: 600;
+            }
+            QRadioButton::indicator {
+                width: 12px;
+                height: 12px;
+                border-radius: 7px;
+                border: 2px solid #475569;
+                background-color: #1a1b26;
+            }
+            QRadioButton::indicator:hover {
+                border-color: #38bdf8;
+            }
+            QRadioButton::indicator:checked {
+                border: 2px solid #38bdf8;
+                background-color: #38bdf8;
+            }
         """)
 
         layout = QtWidgets.QVBoxLayout(container)

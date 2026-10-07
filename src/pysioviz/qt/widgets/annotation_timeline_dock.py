@@ -768,8 +768,8 @@ class AnnotationTimelineDock(QtWidgets.QDockWidget):
                         if isinstance(row_data['label'], bytes)
                         else str(row_data['label'])
                     )
-                    s = float(row_data['task_start_start'])
-                    e = float(row_data['task_end_end'])
+                    s = float(row_data['task_start'])
+                    e = float(row_data['task_end'])
                     r = int(row_data['row']) if 'row' in row_data.dtype.names else (i % 3)
                     self.add_activity_interval(label, s, e, row=r)
 
