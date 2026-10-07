@@ -1,0 +1,3 @@
+"""
+PysioViz Qt Widgets package.
+"""

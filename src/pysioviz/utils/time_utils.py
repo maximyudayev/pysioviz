@@ -175,3 +175,36 @@ def get_time_s_from_local_str(
     local_datetime = datetime.strptime(local_str, input_date_format + ' ' + input_time_format)
 
     return local_datetime.timestamp()
+
+
+def format_relative_time(delta_s: float) -> str:
+    """Format elapsed seconds into hours:minutes:seconds.milliseconds (HH:MM:SS.mmm).
+
+    Args:
+        delta_s (float): Elapsed seconds relative to experiment start.
+
+    Returns:
+        str: Formatted string in HH:MM:SS.mmm format.
+    """
+    if delta_s < 0:
+        sign = '-'
+        delta_s = abs(delta_s)
+    else:
+        sign = ''
+
+    total_sec = int(delta_s)
+    hours = total_sec // 3600
+    minutes = (total_sec % 3600) // 60
+    seconds = total_sec % 60
+    millis = int(round((delta_s - total_sec) * 1000))
+    if millis >= 1000:
+        seconds += 1
+        millis = 0
+        if seconds >= 60:
+            seconds = 0
+            minutes += 1
+            if minutes >= 60:
+                minutes = 0
+                hours += 1
+
+    return f'{sign}{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}'

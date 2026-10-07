@@ -55,7 +55,7 @@ class Cache:
 
     def start(self):
         """Start the background cache management thread."""
-        self._cache_task = threading.Thread(target=self._run_cache_manager)
+        self._cache_task = threading.Thread(target=self._run_cache_manager, daemon=True)
         self._cache_task.start()
 
     def join(self):

@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
+        {
             "name": "Debug GUI",
             "type": "debugpy",
             "request": "launch",
@@ -12,7 +20,7 @@
             "program": "main.py",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
-                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Documents/Code/Projects/kdd2026/data/project_Revalexo/type_Manual/trial_0"
+                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Desktop/prebeta/manual/raw/trial_0"
             },
             "console": "integratedTerminal",
             "subProcess": true,
