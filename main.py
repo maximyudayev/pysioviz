@@ -28,7 +28,6 @@
 import argparse
 import os
 import sys
-from pathlib import Path
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from pysioviz.qt.main_window import PysiovizMainWindow

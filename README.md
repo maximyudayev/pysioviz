@@ -12,9 +12,9 @@
 
 Locally run dashboard for visualization, inspection and annotation of realtime physiological, health, and robotics distributed multimodal data captured with [HERMES](https://github.com/maximyudayev/hermes).
 
-<!-- <p align="center">
-  <img src="images/overview.png" alt="Snapshot of the annotation UI" />
-</p> -->
+<p align="center">
+  <img src="images/gui.gif" alt="Overview of the annotation UI" />
+</p>
 
 ## Installation
 ### GUI
