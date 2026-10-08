@@ -38,10 +38,10 @@ import os
 from queue import Empty, Queue
 import subprocess
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 import numpy as np
 
-from pysioviz.utils.types import DataRequest
+from pysioviz.utils.types import DataRequest, HwAccelEnum
 
 
 class SharedVideoCircularBuffer:
@@ -146,6 +146,7 @@ def _video_decoder_worker_entry(
     read_head: Any,
     new_frame_event: Any,
     metadata_lock: Any,
+    hwaccel: Optional[str] = None,
 ):
     """Subprocess main loop: streams FFmpeg raw RGB frames into shared memory."""
     try:
@@ -202,9 +203,10 @@ def _video_decoder_worker_entry(
                 # Calculate relative start timestamp in video file (0.0 at file start)
                 start_s = max(0.0, cur_fid / fps)
 
-                cmd = [
-                    'ffmpeg',
-                    '-y',
+                cmd = ['ffmpeg', '-y']
+                if hwaccel:
+                    cmd.extend(['-hwaccel', hwaccel])
+                cmd.extend([
                     '-ss',
                     f'{start_s:.4f}',
                     '-i',
@@ -216,7 +218,7 @@ def _video_decoder_worker_entry(
                     '-pix_fmt',
                     'rgb24',
                     '-',
-                ]
+                ])
                 try:
                     ffmpeg_proc = subprocess.Popen(
                         cmd,
@@ -253,6 +255,17 @@ def _video_decoder_worker_entry(
                         ffmpeg_proc.wait()
                     except Exception:
                         pass
+                    # If ffmpeg failed due to hwaccel error on startup, retry with software decoding
+                    if hwaccel and ffmpeg_proc.returncode not in (0, None):
+                        print(
+                            f'[VideoDecoderSubprocess] FFmpeg exited with code {ffmpeg_proc.returncode} '
+                            f'using hwaccel={hwaccel}, falling back to software decoding',
+                            flush=True,
+                        )
+                        hwaccel = None
+                        cmd_queue.put(('seek', cur_fid))
+                        ffmpeg_proc = None
+                        continue
                     ffmpeg_proc = None
                 else:
                     # Calculate timestamp for this frame
@@ -297,7 +310,7 @@ class VideoDecoderSubprocessManager:
         orig_width: int,
         orig_height: int,
         target_width: Optional[int] = None,
-        target_height: Optional[int] = 320,
+        target_height: Optional[int] = 480,
     ) -> Tuple[int, int]:
         """Calculates scaled width and height preserving aspect ratio, ensuring even dimensions."""
         if orig_width <= 0 or orig_height <= 0:
@@ -339,7 +352,8 @@ class VideoDecoderSubprocessManager:
         width: int,
         height: int,
         buf_len: int = 60,
-        target_height: Optional[int] = 320,
+        hwaccel: Optional[Union[str, HwAccelEnum]] = HwAccelEnum.D3D12VA.value,
+        target_height: Optional[int] = 480,
         target_width: Optional[int] = None,
     ):
         self.unique_id = unique_id
@@ -348,9 +362,13 @@ class VideoDecoderSubprocessManager:
         self.fps = float(fps)
         self.orig_width = int(width)
         self.orig_height = int(height)
+        self.buf_len = int(buf_len)
+        if isinstance(hwaccel, HwAccelEnum):
+            self.hwaccel: Optional[str] = hwaccel.value
+        else:
+            self.hwaccel = hwaccel
         self.target_height = target_height
         self.target_width = target_width
-        self.buf_len = int(buf_len)
 
         # Compute scaled resolution to conserve shared memory and decode overhead
         self.width, self.height = self._compute_scaled_dimensions(
@@ -404,6 +422,7 @@ class VideoDecoderSubprocessManager:
                 self.read_head,
                 self.new_frame_event,
                 self.metadata_lock,
+                self.hwaccel,
             ),
             daemon=True,
         )

@@ -28,7 +28,7 @@ class VideoSeekerWorker(QtCore.QThread):
         fps: float = 30.0,
         hwaccel: str = HwAccelEnum.D3D12VA.value,
         prefetch_window_s: float = 2.0,
-        target_height: Optional[int] = 320,
+        target_height: Optional[int] = 480,
         target_width: Optional[int] = None,
         parent: Optional[QtCore.QObject] = None,
     ):
@@ -60,6 +60,7 @@ class VideoSeekerWorker(QtCore.QThread):
             width=self._orig_width,
             height=self._orig_height,
             buf_len=self._buf_len,
+            hwaccel=self.hwaccel,
             target_height=target_height,
             target_width=target_width,
         )
