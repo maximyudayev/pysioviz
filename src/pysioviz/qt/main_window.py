@@ -9,6 +9,18 @@ from typing import Optional
 import numpy as np
 import h5py
 
+try:
+    # For Python 3.8+
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    # For Python < 3.8
+    # pyrefly: ignore [missing-import]
+    from importlib_metadata import PackageNotFoundError, version
+try:
+    __version__ = version('pysioviz')
+except PackageNotFoundError:
+    __version__ = 'NA'
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from pysioviz.qt.playback_engine import PlaybackEngine
@@ -26,11 +38,9 @@ from pysioviz.utils.time_utils import format_relative_time
 class PysiovizMainWindow(QtWidgets.QMainWindow):
     """Main window hosting the modular, dockable PysioViz workspace."""
 
-    CAMERA_IDS = ['40478064', '40549960', '40549975', '40549976']
-
     def __init__(self, session_path: Optional[str] = None, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle('PysioViz - Multimodal Annotation Dashboard')
+        self.setWindowTitle(f'PysioViz v{__version__} - Multimodal Visualization and Annotation')
         self.resize(1720, 980)
 
         # Enable dock nesting and customize corners for spanning top and bottom docks
@@ -350,33 +360,106 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         trial_toas_min: list[float] = []
         trial_toas_max: list[float] = []
 
-        # 1. External Cameras (cameras.hdf5 and cameras_*.mkv)
+        # 1. External Cameras (cameras.hdf5 and camera video files)
         cam_h5_file = path / 'cameras.hdf5'
         if cam_h5_file.exists():
             try:
+                # Discover video files in session directory (preferring .mkv over .mp4)
+                video_extensions = ('.mkv', '.mp4', '.avi')
+                video_files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in video_extensions]
+                video_files.sort(key=lambda p: (p.stem, p.suffix.lower() != '.mkv'))
+
                 with h5py.File(cam_h5_file, 'r') as f:
                     coords = [(0, 0), (0, 1), (1, 0), (1, 1)]
-                    for i, cam_id in enumerate(self.CAMERA_IDS):
-                        video_file = path / f'cameras_{cam_id}.mkv'
-                        if not video_file.exists():
-                            video_file = path / f'cameras_{cam_id}.mp4'
+                    cam_idx = 0
+                    seen_cameras: set[str] = set()
 
-                        toa_ds_path = f'cameras/{cam_id}/toa_s'
-                        if video_file.exists() and toa_ds_path in f:
-                            cam_toas = np.asarray(f[toa_ds_path]).ravel().astype(np.float64)
+                    for video_file in video_files:
+                        if video_file.stem == 'glasses_ego':
+                            continue
+
+                        stem = video_file.stem
+                        stripped_id = stem[len('cameras_') :] if stem.startswith('cameras_') else stem
+
+                        # Candidate paths for toa_s matching video filename to datagroup
+                        candidate_toa_paths = []
+                        if stem.startswith('cameras_'):
+                            candidate_toa_paths.extend(
+                                [
+                                    (stripped_id, f'cameras/{stripped_id}/toa_s'),
+                                    (stripped_id, f'{stripped_id}/toa_s'),
+                                    (stem, f'cameras/{stem}/toa_s'),
+                                    (stem, f'{stem}/toa_s'),
+                                ]
+                            )
+                        else:
+                            candidate_toa_paths.extend(
+                                [
+                                    (stem, f'cameras/{stem}/toa_s'),
+                                    (stem, f'{stem}/toa_s'),
+                                ]
+                            )
+
+                        matched_cam_id: Optional[str] = None
+                        matched_toa_path: Optional[str] = None
+
+                        for cid, toa_p in candidate_toa_paths:
+                            if toa_p in f:
+                                matched_cam_id = cid
+                                matched_toa_path = toa_p
+                                break
+
+                        # Fallback: check if the group exists in HDF5 even without toa_s dataset
+                        if matched_cam_id is None:
+                            candidate_grp_paths = []
+                            if stem.startswith('cameras_'):
+                                candidate_grp_paths.extend(
+                                    [
+                                        (stripped_id, f'cameras/{stripped_id}'),
+                                        (stripped_id, f'{stripped_id}'),
+                                        (stem, f'cameras/{stem}'),
+                                        (stem, f'{stem}'),
+                                    ]
+                                )
+                            else:
+                                candidate_grp_paths.extend(
+                                    [
+                                        (stem, f'cameras/{stem}'),
+                                        (stem, f'{stem}'),
+                                    ]
+                                )
+
+                            for cid, grp_p in candidate_grp_paths:
+                                if grp_p in f and isinstance(f[grp_p], h5py.Group):
+                                    matched_cam_id = cid
+                                    if f'{grp_p}/toa_s' in f:
+                                        matched_toa_path = f'{grp_p}/toa_s'
+                                    break
+
+                        if matched_cam_id is None:
+                            continue
+
+                        if matched_cam_id in seen_cameras:
+                            continue
+                        seen_cameras.add(matched_cam_id)
+
+                        cam_toas = np.array([], dtype=np.float64)
+                        if matched_toa_path and matched_toa_path in f:
+                            cam_toas = np.asarray(f[matched_toa_path]).ravel().astype(np.float64)
                             if len(cam_toas) > 0:
                                 trial_toas_min.append(float(cam_toas[0]))
                                 trial_toas_max.append(float(cam_toas[-1]))
 
-                            r, c = coords[i % 4]
-                            self.video_grid_dock.add_camera(
-                                camera_id=cam_id,
-                                label=f'Cam {cam_id}',
-                                video_path=str(video_file),
-                                toas=cam_toas,
-                                row=r,
-                                col=c,
-                            )
+                        r, c = coords[cam_idx % 4] if cam_idx < 4 else (cam_idx // 2, cam_idx % 2)
+                        self.video_grid_dock.add_camera(
+                            camera_id=matched_cam_id,
+                            label=f'Cam {matched_cam_id}',
+                            video_path=str(video_file),
+                            toas=cam_toas,
+                            row=r,
+                            col=c,
+                        )
+                        cam_idx += 1
             except Exception as e:
                 print(f'Error loading cameras: {e}', flush=True)
 
@@ -486,12 +569,15 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(50, self.apply_proportional_layout)
 
     def _show_about(self):
-        QtWidgets.QMessageBox.information(
+        QtWidgets.QMessageBox.about(
             self,
             'About PysioViz',
-            'PysioViz Desktop Visualization & Annotation Dashboard\n\n'
-            'High-performance native Qt environment for offline, post-hoc replay,\n'
-            'alignment, and annotation of continuous multimodal sensor data.',
+            '<b>PysioViz Visualization &amp; Annotation Dashboard</b><br><br>'
+            'High-performance native Qt desktop app for offline replay<br>'
+            'and annotation of <a href="https://github.com/maximyudayev/hermes"><b>HERMES</b></a> multimodal data.<br><br>'
+            'Developed by <a href="https://yudayev.com"><b>Maxim Yudayev</b></a>.<br><br>'
+            'Open-source on <a href="https://github.com/maximyudayev/pysioviz">'
+            'GitHub</a>.',
         )
 
     def closeEvent(self, event: QtGui.QCloseEvent):

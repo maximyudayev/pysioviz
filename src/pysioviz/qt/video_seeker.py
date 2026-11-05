@@ -39,7 +39,9 @@ class VideoSeekerWorker(QtCore.QThread):
         self.hwaccel = hwaccel
 
         # Get video properties via ffprobe
-        self._orig_width, self._orig_height, self._fps, self._total_frames = self._get_video_properties(fallback_fps=fps)
+        self._orig_width, self._orig_height, self._fps, self._total_frames = self._get_video_properties(
+            fallback_fps=fps
+        )
         if len(self.toas) > 0:
             self._total_frames = max(self._total_frames, len(self.toas))
 

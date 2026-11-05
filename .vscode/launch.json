@@ -17,10 +17,12 @@
             "type": "debugpy",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "main.py",
+            "program": "src/pysioviz/main.py",
+            "args": [
+                "-p", "C:/Users/maxim/Desktop/prebeta/manual/raw/trial_0",
+            ],
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
-                "PYSIOVIZ_BASE_PATH": "C:/Users/maxim/Desktop/prebeta/manual/raw/trial_0"
             },
             "console": "integratedTerminal",
             "subProcess": true,
