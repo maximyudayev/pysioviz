@@ -1,7 +1,11 @@
 """
 PysioViz Main Window: Qt-based desktop environment for offline multimodal replay,
 alignment, and annotation of continuous recordings collected via HERMES.
+Includes real-time synchronized computer vision overlays for bounding boxes,
+segmentation masks, and monocular human poses.
 """
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -25,6 +29,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from pysioviz.qt.playback_engine import PlaybackEngine
 from pysioviz.qt.paged_sensor_reader import PagedSensorReader
+from pysioviz.qt.pipeline_overlays import PipelineOverlayManager
 from pysioviz.qt.widgets.video_grid_dock import VideoGridDock
 from pysioviz.qt.widgets.egocentric_video_dock import EgocentricVideoDock
 from pysioviz.qt.widgets.pose_3d_dock import Pose3DDock
@@ -38,10 +43,22 @@ from pysioviz.utils.time_utils import format_relative_time
 class PysiovizMainWindow(QtWidgets.QMainWindow):
     """Main window hosting the modular, dockable PysioViz workspace."""
 
-    def __init__(self, session_path: Optional[str] = None, parent: Optional[QtWidgets.QWidget] = None):
+    def __init__(
+        self,
+        session_path: Optional[str] = None,
+        pipeline_dir: Optional[str] = None,
+        overlay_parquet: Optional[str] = None,
+        overlay_zarr: Optional[str] = None,
+        parent: Optional[QtWidgets.QWidget] = None,
+    ):
         super().__init__(parent)
         self.setWindowTitle(f'PysioViz v{__version__} - Multimodal Visualization and Annotation')
         self.resize(1720, 980)
+
+        self.pipeline_dir: Optional[str] = pipeline_dir
+        self.overlay_parquet: Optional[str] = overlay_parquet
+        self.overlay_zarr: Optional[str] = overlay_zarr
+        self.overlay_manager: Optional[PipelineOverlayManager] = None
 
         # Enable dock nesting and customize corners for spanning top and bottom docks
         self.setDockNestingEnabled(True)
@@ -177,6 +194,10 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         open_session_action.triggered.connect(self._on_open_session_dialog)
         file_menu.addAction(open_session_action)
 
+        load_overlays_action = QtGui.QAction('Load Pipeline Overlays (Parquet/Zarr)...', self)
+        load_overlays_action.triggered.connect(self._on_load_pipeline_overlays_dialog)
+        file_menu.addAction(load_overlays_action)
+
         add_modality_action = QtGui.QAction('Add Modality Stream...', self)
         add_modality_action.setShortcut('Ctrl+M')
         add_modality_action.triggered.connect(self._on_add_modality_dialog)
@@ -214,6 +235,40 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         reset_layout_action = QtGui.QAction('Reset Default Dock Layout', self)
         reset_layout_action.triggered.connect(self._reset_default_layout)
         view_menu.addAction(reset_layout_action)
+
+        # Overlays Menu
+        overlays_menu = menubar.addMenu('&Overlays')
+
+        self.show_bbox_action = QtGui.QAction('Show Target Bounding Boxes', self, checkable=True)
+        self.show_bbox_action.setChecked(True)
+        self.show_bbox_action.setShortcut('Ctrl+B')
+        self.show_bbox_action.triggered.connect(
+            lambda checked: self.video_grid_dock.set_overlay_visibility(show_bbox=checked)
+        )
+        overlays_menu.addAction(self.show_bbox_action)
+
+        self.show_mask_action = QtGui.QAction('Show Foreground Segmentation Masks', self, checkable=True)
+        self.show_mask_action.setChecked(True)
+        self.show_mask_action.setShortcut('Ctrl+Shift+M')
+        self.show_mask_action.triggered.connect(
+            lambda checked: self.video_grid_dock.set_overlay_visibility(show_mask=checked)
+        )
+        overlays_menu.addAction(self.show_mask_action)
+
+        self.show_pose_action = QtGui.QAction('Show Monocular Human Poses', self, checkable=True)
+        self.show_pose_action.setChecked(True)
+        self.show_pose_action.setShortcut('Ctrl+Shift+P')
+        self.show_pose_action.triggered.connect(
+            lambda checked: self.video_grid_dock.set_overlay_visibility(show_pose=checked)
+        )
+        overlays_menu.addAction(self.show_pose_action)
+
+        self.show_reid_label_action = QtGui.QAction('Show Re-ID Confidence Badges', self, checkable=True)
+        self.show_reid_label_action.setChecked(True)
+        self.show_reid_label_action.triggered.connect(
+            lambda checked: self.video_grid_dock.set_overlay_visibility(show_reid_label=checked)
+        )
+        overlays_menu.addAction(self.show_reid_label_action)
 
         # Playback Menu
         playback_menu = menubar.addMenu('&Playback')
@@ -254,6 +309,10 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         self.status_session_label = QtWidgets.QLabel('Session: None')
         self.status_session_label.setStyleSheet('color: #cbd5e1; margin-left: 6px;')
         status.addWidget(self.status_session_label, stretch=1)
+
+        self.status_overlay_label = QtWidgets.QLabel('Overlays: --')
+        self.status_overlay_label.setStyleSheet('color: #00f5d4; font-weight: bold; margin-right: 12px;')
+        status.addPermanentWidget(self.status_overlay_label)
 
         self.status_range_label = QtWidgets.QLabel('Range: --')
         self.status_range_label.setStyleSheet('color: #38bdf8; margin-right: 12px;')
@@ -332,6 +391,28 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         if dir_path:
             self.load_session(dir_path)
 
+    def _on_load_pipeline_overlays_dialog(self):
+        """Open file dialog allowing user to choose frame_index.parquet or pipeline workspace."""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            'Select Pipeline Frame Index Parquet',
+            '',
+            'Parquet Files (*.parquet);;All Files (*)',
+        )
+        if file_path:
+            p = Path(file_path)
+            mgr = PipelineOverlayManager(
+                parquet_path=p,
+                zarr_path=p.parent / 'masks_and_crops.zarr' if (p.parent / 'masks_and_crops.zarr').exists() else None,
+            )
+            if mgr and mgr._frame_data:
+                self.overlay_manager = mgr
+                self.video_grid_dock.set_overlay_manager(mgr)
+                n_frames = len(mgr._frame_data)
+                self.status_overlay_label.setText(f'Overlays: ACTIVE ({n_frames} frames)')
+                self.status_overlay_label.setStyleSheet('color: #00f5d4; font-weight: bold; margin-right: 12px;')
+                self.statusBar().showMessage(f'Loaded pipeline overlays: {p.name} ({n_frames} frames)', 4000)
+
     def _on_add_modality_dialog(self):
         dialog = AddModalityDialog(self)
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted and dialog.modality_config:
@@ -360,13 +441,21 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
         trial_toas_min: list[float] = []
         trial_toas_max: list[float] = []
 
+        # Determine raw input directory (checking both direct root and 00_raw_input subfolder)
+        raw_input_dir = path / '00_raw_input' if (path / '00_raw_input').exists() else path
+        cam_h5_file = raw_input_dir / 'cameras.hdf5'
+        if not cam_h5_file.exists() and (path / 'cameras.hdf5').exists():
+            cam_h5_file = path / 'cameras.hdf5'
+            raw_input_dir = path
+
         # 1. External Cameras (cameras.hdf5 and camera video files)
-        cam_h5_file = path / 'cameras.hdf5'
         if cam_h5_file.exists():
             try:
                 # Discover video files in session directory (preferring .mkv over .mp4)
                 video_extensions = ('.mkv', '.mp4', '.avi')
-                video_files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in video_extensions]
+                video_files = [p for p in raw_input_dir.iterdir() if p.is_file() and p.suffix.lower() in video_extensions]
+                if not video_files and raw_input_dir != path:
+                    video_files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in video_extensions]
                 video_files.sort(key=lambda p: (p.stem, p.suffix.lower() != '.mkv'))
 
                 with h5py.File(cam_h5_file, 'r') as f:
@@ -464,8 +553,13 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
                 print(f'Error loading cameras: {e}', flush=True)
 
         # 2. First-Person Egocentric Video (glasses_ego.mkv & glasses.hdf5)
-        glasses_video = path / 'glasses_ego.mkv'
-        glasses_h5 = path / 'glasses.hdf5'
+        glasses_video = raw_input_dir / 'glasses_ego.mkv'
+        if not glasses_video.exists():
+            glasses_video = path / 'glasses_ego.mkv'
+        glasses_h5 = raw_input_dir / 'glasses.hdf5'
+        if not glasses_h5.exists():
+            glasses_h5 = path / 'glasses.hdf5'
+
         if glasses_video.exists() and glasses_h5.exists():
             try:
                 with h5py.File(glasses_h5, 'r') as f:
@@ -479,7 +573,11 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
                 print(f'Error loading glasses video: {e}', flush=True)
 
         # 3. 3D Reconstructed Pose Skeleton (mvn_analyze.hdf5)
-        mvn_h5 = path / 'mvn_analyze.hdf5'
+        mvn_h5 = raw_input_dir / 'mvn_analyze.hdf5'
+        if not mvn_h5.exists():
+            mvn_h5 = raw_input_dir / 'mvn-analyze.hdf5'
+        if not mvn_h5.exists():
+            mvn_h5 = path / 'mvn_analyze.hdf5'
         if not mvn_h5.exists():
             mvn_h5 = path / 'mvn-analyze.hdf5'
 
@@ -491,7 +589,9 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
             )
 
         # 4. Sensor Modalities (revalexo.hdf5)
-        revalexo_h5 = path / 'revalexo.hdf5'
+        revalexo_h5 = raw_input_dir / 'revalexo.hdf5'
+        if not revalexo_h5.exists():
+            revalexo_h5 = path / 'revalexo.hdf5'
         if revalexo_h5.exists():
             try:
                 # Add Torso Euler IMU
@@ -552,7 +652,30 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
             except Exception as e:
                 print(f'Error loading revalexo sensors: {e}', flush=True)
 
-        # 5. Calculate synchronized universal timeline bounds
+        # 5. Pipeline Computer Vision Overlays (frame_index.parquet & masks_and_crops.zarr)
+        overlay_mgr: Optional[PipelineOverlayManager] = None
+        if self.overlay_parquet or self.overlay_zarr or self.pipeline_dir:
+            p_dir = Path(self.pipeline_dir) if self.pipeline_dir else path
+            overlay_mgr = PipelineOverlayManager(
+                parquet_path=self.overlay_parquet or (p_dir / '01_ingestion' / 'frame_index.parquet'),
+                zarr_path=self.overlay_zarr or (p_dir / '01_ingestion' / 'masks_and_crops.zarr'),
+            )
+        if overlay_mgr is None or not overlay_mgr._frame_data:
+            overlay_mgr = PipelineOverlayManager.discover(path)
+            if overlay_mgr is None and path.name == '00_raw_input':
+                overlay_mgr = PipelineOverlayManager.discover(path.parent)
+
+        if overlay_mgr is not None and overlay_mgr._frame_data:
+            self.overlay_manager = overlay_mgr
+            self.video_grid_dock.set_overlay_manager(overlay_mgr)
+            n_frames = len(overlay_mgr._frame_data)
+            self.status_overlay_label.setText(f'Overlays: ACTIVE ({n_frames} frames)')
+            self.status_overlay_label.setStyleSheet('color: #00f5d4; font-weight: bold; margin-right: 12px;')
+        else:
+            self.status_overlay_label.setText('Overlays: NONE')
+            self.status_overlay_label.setStyleSheet('color: #64748b; margin-right: 12px;')
+
+        # 6. Calculate synchronized universal timeline bounds
         if trial_toas_min and trial_toas_max:
             global_min = max(trial_toas_min)  # latest start across all synchronized sensors
             global_max = min(trial_toas_max)  # earliest end
@@ -589,4 +712,6 @@ class PysiovizMainWindow(QtWidgets.QMainWindow):
             self.ego_video_dock.stop_all()
         if hasattr(self, 'pose_3d_dock'):
             self.pose_3d_dock.stop_all()
+        if self.overlay_manager is not None:
+            self.overlay_manager.stop()
         event.accept()

@@ -49,6 +49,8 @@ dependencies = [
   "PyQt6",
   "pyqtgraph",
   "PyOpenGL",
+  "pyarrow",
+  "zarr",
 ]
 
 [project.scripts]

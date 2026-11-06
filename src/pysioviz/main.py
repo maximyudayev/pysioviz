@@ -4,6 +4,8 @@ Usage:
     uv run -m pysioviz -p <path_to_hermes_data_folder>
 """
 
+from __future__ import annotations
+
 import ctypes
 import argparse
 import os
@@ -67,6 +69,29 @@ def main(argv: list[str] | None = None):
         required=True,
         help='Path to multimodal recording session directory (containing HDF5 and MKV files)',
     )
+    parser.add_argument(
+        '--pipeline-dir',
+        type=str,
+        default=None,
+        help='Optional path to gait analysis pipeline workspace directory containing 01_ingestion/ artifacts',
+    )
+    parser.add_argument(
+        '--overlay-parquet',
+        type=str,
+        default=None,
+        help='Optional explicit path to Stage 1 frame_index.parquet artifact',
+    )
+    parser.add_argument(
+        '--overlay-zarr',
+        type=str,
+        default=None,
+        help='Optional explicit path to Stage 1 masks_and_crops.zarr store',
+    )
+    parser.add_argument(
+        '--no-masks',
+        action='store_true',
+        help='Disable segmentation mask overlays by default for minimum CPU overhead',
+    )
     args = parser.parse_args(argv)
 
     # Native Qt PysiovizMainWindow Desktop App
@@ -83,7 +108,18 @@ def main(argv: list[str] | None = None):
     app.setFont(font)
 
     session_path = args.base_path if os.path.isdir(args.base_path) else None
-    window = PysiovizMainWindow(session_path=session_path)
+    window = PysiovizMainWindow(
+        session_path=session_path,
+        pipeline_dir=args.pipeline_dir,
+        overlay_parquet=args.overlay_parquet,
+        overlay_zarr=args.overlay_zarr,
+    )
+
+    if args.no_masks:
+        if hasattr(window, 'video_grid_dock'):
+            window.video_grid_dock.set_overlay_visibility(show_mask=False)
+        if hasattr(window, 'show_mask_action'):
+            window.show_mask_action.setChecked(False)
 
     # Force creation of native Win32 HWND and apply window icon
     window.winId()
